@@ -3,11 +3,8 @@ import 'dart:ui';
 
 import 'package:gizmo_rules/gizmo_rules.dart';
 
-/// One filled silhouette in a 100 by 100 box.
-///
-/// The ink stays inside the centered 72 by 72 region. Holes and the loop's
-/// inner circle are cutouts. A handle is a thick arch opening onto the body.
-Path iconSilhouette(Assembly assembly) {
+/// Body, top, and side, without the hole cut out.
+Path iconOutline(Assembly assembly) {
   var path = bodyPath(assembly.body);
   final top = topGlyph(assembly.body, assembly.top);
   if (top != null) {
@@ -21,11 +18,36 @@ Path iconSilhouette(Assembly assembly) {
   if (side != null) {
     path = Path.combine(PathOperation.union, path, side);
   }
-  final hole = holeGlyph(assembly.hole);
-  if (hole != null) {
-    path = Path.combine(PathOperation.difference, path, hole);
-  }
   return path;
+}
+
+/// One filled silhouette in a 100 by 100 box.
+///
+/// The ink stays inside the centered 72 by 72 region. Holes and the loop's
+/// inner circle are cutouts. A handle is a thick arch opening onto the body.
+Path iconSilhouette(Assembly assembly) {
+  final outline = iconOutline(assembly);
+  final hole = holeGlyph(assembly.hole);
+  if (hole == null) return outline;
+  return Path.combine(PathOperation.difference, outline, hole);
+}
+
+/// True when [a] and [b] would paint as the same icon.
+///
+/// Equal assemblies match. A different color or pulse does not. Otherwise the
+/// silhouettes are sampled on a 2-unit grid covering the ink.
+bool samePicture(Assembly a, Assembly b) {
+  if (a == b) return true;
+  if (a.color != b.color || a.pulse != b.pulse) return false;
+  final left = iconSilhouette(a);
+  final right = iconSilhouette(b);
+  for (var y = 14; y <= 86; y += 2) {
+    for (var x = 14; x <= 86; x += 2) {
+      final point = Offset(x.toDouble(), y.toDouble());
+      if (left.contains(point) != right.contains(point)) return false;
+    }
+  }
+  return true;
 }
 
 Path bodyPath(BodyId body) {
@@ -34,12 +56,13 @@ Path bodyPath(BodyId body) {
       return Path()
         ..addOval(Rect.fromCircle(center: const Offset(50, 50), radius: 24));
     case BodyId.slab:
-      return Path()..addRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTRB(27, 27, 73, 73),
-          const Radius.circular(10),
-        ),
-      );
+      return Path()
+        ..addRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTRB(27, 27, 73, 73),
+            const Radius.circular(10),
+          ),
+        );
     case BodyId.wedge:
       return Path()
         ..moveTo(50, 27)
@@ -57,6 +80,43 @@ Path bodyPath(BodyId body) {
         )
         ..lineTo(73, 75.5)
         ..lineTo(27, 75.5)
+        ..close();
+  }
+}
+
+/// Smaller body shape in the middle, for [PulseId.core].
+///
+/// The painter clears the hole afterward, so this path may cross it.
+Path coreGlyph(BodyId body) {
+  switch (body) {
+    case BodyId.disc:
+      return Path()
+        ..addOval(Rect.fromCircle(center: const Offset(50, 50), radius: 16));
+    case BodyId.slab:
+      return Path()
+        ..addRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTRB(38, 38, 62, 62),
+            const Radius.circular(6),
+          ),
+        );
+    case BodyId.wedge:
+      return Path()
+        ..moveTo(50, 39)
+        ..lineTo(65.5, 67)
+        ..lineTo(34.5, 67)
+        ..close();
+    case BodyId.arch:
+      return Path()
+        ..moveTo(35, 50)
+        ..arcTo(
+          Rect.fromCircle(center: const Offset(50, 50), radius: 15),
+          math.pi,
+          math.pi,
+          false,
+        )
+        ..lineTo(65, 68)
+        ..lineTo(35, 68)
         ..close();
   }
 }
@@ -122,12 +182,13 @@ Path? holeGlyph(HoleId hole) {
       return Path()
         ..addOval(Rect.fromCircle(center: const Offset(50, 50), radius: 8));
     case HoleId.slot:
-      return Path()..addRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTRB(39, 46, 61, 54),
-          const Radius.circular(4),
-        ),
-      );
+      return Path()
+        ..addRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTRB(39, 46, 61, 54),
+            const Radius.circular(4),
+          ),
+        );
   }
 }
 

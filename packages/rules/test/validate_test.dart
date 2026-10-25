@@ -62,6 +62,17 @@ void main() {
         run.copy(
           rounds: [
             for (final round in run.rounds)
+              round.index == 0 ? round.copyWith(pulse: 'flash') : round,
+          ],
+        ),
+      ),
+      'invalid_pulse',
+    );
+    expect(
+      validateSubmittedRun(
+        run.copy(
+          rounds: [
+            for (final round in run.rounds)
               round.index == 0
                   ? round.copyWith(topPart: 'none', sidePart: 'none')
                   : round,
@@ -113,6 +124,7 @@ SubmittedRun play({required List<bool> answers}) {
         sidePart: built.original.side.name,
         hole: built.original.hole.name,
         color: built.original.color.name,
+        pulse: built.original.pulse.name,
         choiceCount: built.choiceCount,
         correct: correct,
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gizmo_rules/gizmo_rules.dart';
 
 import '../api/gizmo_client.dart';
 import '../name_store.dart';
@@ -15,13 +16,17 @@ class HomeScreen extends StatefulWidget {
     required this.playerName,
     required this.client,
     required this.names,
+    required this.palette,
     required this.onPlayerName,
+    required this.onPalette,
   });
 
   final String playerName;
   final GizmoClient client;
   final NameStore names;
+  final IconPalette palette;
   final ValueChanged<String> onPlayerName;
+  final ValueChanged<IconPalette> onPalette;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -132,8 +137,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                     value: _loading
                         ? '…'
                         : best == null
-                        ? '—'
-                        : '$best',
+                            ? '—'
+                            : '$best',
                   ),
                   const SizedBox(width: 12),
                   _Stat(
@@ -141,8 +146,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                     value: _loading
                         ? '…'
                         : runs == null
-                        ? '—'
-                        : '$runs',
+                            ? '—'
+                            : '$runs',
                   ),
                 ],
               ),
@@ -151,6 +156,16 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 Text(_error!, style: const TextStyle(color: mutedColor)),
               ],
               const Spacer(),
+              const Text(
+                'Colors',
+                style: TextStyle(fontSize: 16, color: mutedColor),
+              ),
+              const SizedBox(height: 8),
+              _PalettePicker(
+                selected: widget.palette,
+                onSelected: widget.onPalette,
+              ),
+              const SizedBox(height: 16),
               GizmoButton(
                 label: 'Play',
                 onPressed: () {
@@ -184,6 +199,98 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 label: 'Change name',
                 filled: false,
                 onPressed: _changeName,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PalettePicker extends StatelessWidget {
+  const _PalettePicker({required this.selected, required this.onSelected});
+
+  final IconPalette selected;
+  final ValueChanged<IconPalette> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var i = 0; i < iconPalettes.length; i++) ...[
+          if (i > 0) const SizedBox(width: 6),
+          Expanded(
+            child: _PaletteChoice(
+              palette: iconPalettes[i],
+              selected: iconPalettes[i] == selected,
+              onSelected: onSelected,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PaletteChoice extends StatelessWidget {
+  const _PaletteChoice({
+    required this.palette,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final IconPalette palette;
+  final bool selected;
+  final ValueChanged<IconPalette> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: palette.label,
+      child: InkWell(
+        onTap: () => onSelected(palette),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          key: ValueKey('palette-${palette.id}'),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? inkColor : const Color(0xFFD5D5D5),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: SizedBox(
+                  height: 16,
+                  child: Row(
+                    children: [
+                      for (final color in colorRing)
+                        Expanded(
+                          child: ColoredBox(
+                            color: Color(palette.values[color]!),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                palette.label,
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: selected ? inkColor : mutedColor,
+                ),
               ),
             ],
           ),

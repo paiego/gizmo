@@ -11,6 +11,7 @@ class SubmittedRound {
     required this.sidePart,
     required this.hole,
     required this.color,
+    required this.pulse,
     required this.choiceCount,
     required this.correct,
   });
@@ -21,6 +22,7 @@ class SubmittedRound {
   final String sidePart;
   final String hole;
   final String color;
+  final String pulse;
   final int choiceCount;
   final bool correct;
 
@@ -31,6 +33,7 @@ class SubmittedRound {
     String? sidePart,
     String? hole,
     String? color,
+    String? pulse,
     int? choiceCount,
     bool? correct,
   }) {
@@ -41,21 +44,23 @@ class SubmittedRound {
       sidePart: sidePart ?? this.sidePart,
       hole: hole ?? this.hole,
       color: color ?? this.color,
+      pulse: pulse ?? this.pulse,
       choiceCount: choiceCount ?? this.choiceCount,
       correct: correct ?? this.correct,
     );
   }
 
   Map<String, Object?> toJson() => {
-    'index': index,
-    'body': body,
-    'topPart': topPart,
-    'sidePart': sidePart,
-    'hole': hole,
-    'color': color,
-    'choiceCount': choiceCount,
-    'correct': correct,
-  };
+        'index': index,
+        'body': body,
+        'topPart': topPart,
+        'sidePart': sidePart,
+        'hole': hole,
+        'color': color,
+        'pulse': pulse,
+        'choiceCount': choiceCount,
+        'correct': correct,
+      };
 }
 
 /// A finished run. It has exactly three incorrect rounds.
@@ -71,10 +76,10 @@ class SubmittedRun {
   final List<SubmittedRound> rounds;
 
   Map<String, Object?> toJson() => {
-    'playerName': playerName,
-    'score': score,
-    'rounds': [for (final round in rounds) round.toJson()],
-  };
+        'playerName': playerName,
+        'score': score,
+        'rounds': [for (final round in rounds) round.toJson()],
+      };
 }
 
 /// Returns a short reason when [run] breaks the rules, otherwise null.
@@ -108,6 +113,7 @@ String? validateSubmittedRun(SubmittedRun run) {
     if (parseSide(round.sidePart) == null) return 'invalid_side';
     if (parseHole(round.hole) == null) return 'invalid_hole';
     if (parseColor(round.color) == null) return 'invalid_color';
+    if (parsePulse(round.pulse) == null) return 'invalid_pulse';
     if (round.topPart == 'none' && round.sidePart == 'none') {
       return 'invalid_parts';
     }

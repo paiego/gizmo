@@ -19,6 +19,7 @@ void main() {
               side: side,
               hole: hole,
               color: ColorId.red,
+              pulse: PulseId.none,
             );
             final path = iconSilhouette(assembly);
             final bounds = path.getBounds();
@@ -108,10 +109,70 @@ void main() {
           side: sample.$3,
           hole: HoleId.none,
           color: ColorId.blue,
+          pulse: PulseId.none,
         ),
       );
       expect(path.contains(const Offset(50, 58)), isTrue, reason: '$sample');
       expect(path.computeMetrics().length, 1, reason: '$sample');
+    }
+  });
+
+  test('a different part is not the same picture', () {
+    const original = Assembly(
+      body: BodyId.disc,
+      top: TopId.horn,
+      side: SideId.tab,
+      hole: HoleId.none,
+      color: ColorId.teal,
+      pulse: PulseId.none,
+    );
+    expect(samePicture(original, original), isTrue);
+    expect(
+      samePicture(original, original.copyWith(hole: HoleId.round)),
+      isFalse,
+    );
+    expect(
+      samePicture(original, original.copyWith(color: ColorId.green)),
+      isFalse,
+    );
+    expect(
+      samePicture(original, original.copyWith(top: TopId.knob)),
+      isFalse,
+    );
+    expect(
+      samePicture(original, original.copyWith(pulse: PulseId.core)),
+      isFalse,
+    );
+    expect(
+      samePicture(original, original.copyWith(pulse: PulseId.rim)),
+      isFalse,
+    );
+  });
+
+  test('the core stays inside the ink and leaves the hole visible', () {
+    for (final body in BodyId.values) {
+      final core = coreGlyph(body);
+      final bounds = core.getBounds();
+      expect(bounds.left, greaterThanOrEqualTo(14), reason: '$body');
+      expect(bounds.top, greaterThanOrEqualTo(14), reason: '$body');
+      expect(bounds.right, lessThanOrEqualTo(86), reason: '$body');
+      expect(bounds.bottom, lessThanOrEqualTo(86), reason: '$body');
+      final ink = bodyPath(body);
+      for (final hole in [HoleId.round, HoleId.slot]) {
+        final cut = holeGlyph(hole)!;
+        var visible = false;
+        var escaped = false;
+        for (var y = 14; y <= 86; y += 2) {
+          for (var x = 14; x <= 86; x += 2) {
+            final point = Offset(x.toDouble(), y.toDouble());
+            if (!core.contains(point)) continue;
+            if (!ink.contains(point)) escaped = true;
+            if (!cut.contains(point)) visible = true;
+          }
+        }
+        expect(escaped, isFalse, reason: '$body core leaves the body');
+        expect(visible, isTrue, reason: '$body $hole core covers the hole');
+      }
     }
   });
 
@@ -128,6 +189,7 @@ void main() {
                 side: SideId.handle,
                 hole: HoleId.slot,
                 color: ColorId.amber,
+                pulse: PulseId.none,
               ),
               size: 220,
             ),
@@ -136,7 +198,60 @@ void main() {
       ),
     );
     expect(find.byType(IconView), findsOneWidget);
+    expect(tester.binding.transientCallbackCount, 0);
   });
+
+  testWidgets('core and rim pulses build and repaint', (tester) async {
+    IconPainter.paintCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              IconView(assembly: _pulsed(PulseId.core), size: 140),
+              IconView(assembly: _pulsed(PulseId.rim), size: 140),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(IconView), findsNWidgets(2));
+    expect(tester.binding.transientCallbackCount, greaterThan(0));
+    final core = _painter(tester, 0);
+    final rim = _painter(tester, 1);
+    expect(core.assembly.pulse, PulseId.core);
+    expect(rim.assembly.pulse, PulseId.rim);
+    final painted = IconPainter.paintCount;
+    expect(painted, greaterThan(0));
+
+    await tester.pump(const Duration(milliseconds: 250));
+    final coreLater = _painter(tester, 0);
+    final rimLater = _painter(tester, 1);
+    expect(coreLater.phase, isNot(core.phase));
+    expect(rimLater.phase, isNot(rim.phase));
+    expect(coreLater.shouldRepaint(core), isTrue);
+    expect(rimLater.shouldRepaint(rim), isTrue);
+    expect(IconPainter.paintCount, greaterThan(painted));
+  });
+}
+
+Assembly _pulsed(PulseId pulse) {
+  return Assembly(
+    body: BodyId.disc,
+    top: TopId.knob,
+    side: SideId.tab,
+    hole: HoleId.round,
+    color: ColorId.blue,
+    pulse: pulse,
+  );
+}
+
+IconPainter _painter(WidgetTester tester, int index) {
+  final paint = find.descendant(
+    of: find.byType(IconView).at(index),
+    matching: find.byType(CustomPaint),
+  );
+  return tester.widget<CustomPaint>(paint).painter! as IconPainter;
 }
 
 double mathMax(double a, double b) => a > b ? a : b;

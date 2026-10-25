@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API",
+      "type": "dart",
+      "request": "launch",
+      "program": "bin/server.dart",
+      "cwd": "${workspaceFolder}/api",
+      "console": "terminal"
+    },
+    {
+      "name": "App (console)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "cwd": "${workspaceFolder}/app",
+      "deviceId": "E106E733-122D-4B5B-9F3A-A7F220FBE697",
+      "console": "debugConsole"
+    },
+    {
+      "name": "App (iOS)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "cwd": "${workspaceFolder}/app",
+      "deviceId": "E106E733-122D-4B5B-9F3A-A7F220FBE697",
+      "console": "terminal"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "API + App (console)",
+      "configurations": ["API", "App (console)"],
+      "stopAll": true
+    },
+    {
+      "name": "API + App (iOS)",
+      "configurations": ["API", "App (iOS)"],
+      "stopAll": true
+    }
+  ]
+}

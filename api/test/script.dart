@@ -16,6 +16,7 @@ SubmittedRun scriptedRun(String name, List<bool> answers, {int seed = 1}) {
         sidePart: built.original.side.name,
         hole: built.original.hole.name,
         color: built.original.color.name,
+        pulse: built.original.pulse.name,
         choiceCount: built.choiceCount,
         correct: correct,
       ),

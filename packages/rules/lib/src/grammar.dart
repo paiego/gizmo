@@ -6,6 +6,8 @@ enum SideId { none, tab, handle, wing }
 
 enum HoleId { none, round, slot }
 
+enum PulseId { none, core, rim }
+
 enum ColorId { red, orange, amber, green, teal, blue, purple, pink }
 
 /// Ring order. Adjacent colors are the previous and next entries, wrapping.
@@ -32,7 +34,7 @@ const Map<ColorId, int> colorValue = {
   ColorId.pink: 0xFFD81B60,
 };
 
-/// One icon: a body, a top, a side, a hole, and a color.
+/// One icon: a body, a top, a side, a hole, a color, and a pulse.
 class Assembly {
   const Assembly({
     required this.body,
@@ -40,6 +42,7 @@ class Assembly {
     required this.side,
     required this.hole,
     required this.color,
+    required this.pulse,
   });
 
   final BodyId body;
@@ -47,6 +50,7 @@ class Assembly {
   final SideId side;
   final HoleId hole;
   final ColorId color;
+  final PulseId pulse;
 
   /// Top and side are not both `none`.
   bool get isLegal => top != TopId.none || side != SideId.none;
@@ -57,6 +61,7 @@ class Assembly {
     SideId? side,
     HoleId? hole,
     ColorId? color,
+    PulseId? pulse,
   }) {
     return Assembly(
       body: body ?? this.body,
@@ -64,6 +69,7 @@ class Assembly {
       side: side ?? this.side,
       hole: hole ?? this.hole,
       color: color ?? this.color,
+      pulse: pulse ?? this.pulse,
     );
   }
 
@@ -74,20 +80,21 @@ class Assembly {
       other.top == top &&
       other.side == side &&
       other.hole == hole &&
-      other.color == color;
+      other.color == color &&
+      other.pulse == pulse;
 
   @override
-  int get hashCode => Object.hash(body, top, side, hole, color);
+  int get hashCode => Object.hash(body, top, side, hole, color, pulse);
 
   @override
   String toString() =>
-      '${body.name}/${top.name}/${side.name}/${hole.name}/${color.name}';
+      '${body.name}/${top.name}/${side.name}/${hole.name}/${color.name}/${pulse.name}';
 }
 
-/// Bodies, tops, sides, holes, and colors, excluding a bare body.
+/// Bodies, tops, sides, holes, colors, and pulses, excluding a bare body.
 ///
-/// `4 * (4 * 4 - 1) * 3 * 8 = 1440`.
-const int assemblyCount = 1440;
+/// `4 * (4 * 4 - 1) * 3 * 8 * 3 = 4320`.
+const int assemblyCount = 4320;
 
 List<ColorId> adjacentColors(ColorId color) {
   final index = colorRing.indexOf(color);
@@ -115,6 +122,8 @@ SideId? parseSide(String raw) => _byName(SideId.values, raw);
 HoleId? parseHole(String raw) => _byName(HoleId.values, raw);
 
 ColorId? parseColor(String raw) => _byName(ColorId.values, raw);
+
+PulseId? parsePulse(String raw) => _byName(PulseId.values, raw);
 
 T? _byName<T extends Enum>(List<T> values, String raw) {
   for (final value in values) {

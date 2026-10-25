@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gizmo/game/session.dart';
+import 'package:gizmo/widgets/icon_paths.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 
 void main() {
@@ -32,6 +33,18 @@ void main() {
     expect(session.score, 3);
     expect(session.chances, 0);
     expect(validateSubmittedRun(session.transcript('Ada')), isNull);
+  });
+
+  test('a dealt decoy never paints as the original', () {
+    final session = GameSession(random: Random(7));
+    for (var turn = 0; turn < 12; turn++) {
+      final round = session.deal();
+      for (final choice in round.choices) {
+        if (choice == round.original) continue;
+        expect(samePicture(choice, round.original), isFalse);
+      }
+      session.answer(round: round, correct: true);
+    }
   });
 
   test('leaving before three misses is not a finished run', () {

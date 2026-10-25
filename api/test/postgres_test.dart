@@ -53,14 +53,17 @@ void main() {
 
     final again = await _post(
       api,
-      scriptedRun(ada.toLowerCase(), [
-        true,
-        true,
-        true,
-        false,
-        false,
-        false,
-      ], seed: 4),
+      scriptedRun(
+          ada.toLowerCase(),
+          [
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+          ],
+          seed: 4),
     );
     expect(again.status, 200, reason: '${again.body}');
     expect(again.body['playerName'], ada);
@@ -124,6 +127,7 @@ void main() {
           'sidePart': 'none',
           'hole': 'none',
           'color': 'red',
+          'pulse': 'none',
           'choiceCount': 3,
           'correct': false,
         },

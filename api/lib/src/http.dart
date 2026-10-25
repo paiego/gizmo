@@ -134,6 +134,8 @@ _ParsedRun _parseRun(Object? decoded) {
     if (hole is! String) return const _ParsedRun.err('invalid_hole');
     final color = round['color'];
     if (color is! String) return const _ParsedRun.err('invalid_color');
+    final pulse = round['pulse'];
+    if (pulse is! String) return const _ParsedRun.err('invalid_pulse');
     final choiceCount = round['choiceCount'];
     if (choiceCount is! int) {
       return const _ParsedRun.err('invalid_choice_count');
@@ -148,6 +150,7 @@ _ParsedRun _parseRun(Object? decoded) {
         sidePart: side,
         hole: hole,
         color: color,
+        pulse: pulse,
         choiceCount: choiceCount,
         correct: correct,
       ),

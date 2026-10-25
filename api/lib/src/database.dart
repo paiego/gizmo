@@ -94,10 +94,10 @@ class Database implements GizmoStore {
             Sql.named('''
               insert into rounds (
                 id, run_id, round_index, body, top_part, side_part,
-                hole, color, choice_count, correct
+                hole, color, pulse, choice_count, correct
               ) values (
                 gen_random_uuid(), cast(@run as uuid), @index, @body, @top,
-                @side, @hole, @color, @choice, @correct
+                @side, @hole, @color, @pulse, @choice, @correct
               )
             '''),
             parameters: {
@@ -108,6 +108,7 @@ class Database implements GizmoStore {
               'side': round.sidePart,
               'hole': round.hole,
               'color': round.color,
+              'pulse': round.pulse,
               'choice': round.choiceCount,
               'correct': round.correct,
             },
@@ -317,9 +318,8 @@ Endpoint endpointFromUrl(String raw) {
   final uri = Uri.parse(raw);
   final pieces = uri.userInfo.split(':');
   final username = pieces.isEmpty ? '' : Uri.decodeComponent(pieces.first);
-  final password = pieces.length < 2
-      ? ''
-      : Uri.decodeComponent(pieces.sublist(1).join(':'));
+  final password =
+      pieces.length < 2 ? '' : Uri.decodeComponent(pieces.sublist(1).join(':'));
   final database = uri.pathSegments.isEmpty ? 'gizmo' : uri.pathSegments.first;
   return Endpoint(
     host: uri.host.isEmpty ? 'localhost' : uri.host,
@@ -343,16 +343,14 @@ List<File> migrationFiles() {
   }
   for (final directory in candidates) {
     if (!directory.existsSync()) continue;
-    final files =
-        directory
-            .listSync()
-            .whereType<File>()
-            .where((file) => file.path.endsWith('.sql'))
-            .toList()
-          ..sort(
-            (a, b) =>
-                a.uri.pathSegments.last.compareTo(b.uri.pathSegments.last),
-          );
+    final files = directory
+        .listSync()
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.sql'))
+        .toList()
+      ..sort(
+        (a, b) => a.uri.pathSegments.last.compareTo(b.uri.pathSegments.last),
+      );
     if (files.isNotEmpty) return files;
   }
   throw StateError('Could not find api/migrations.');

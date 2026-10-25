@@ -28,7 +28,8 @@ enum _Slot { top, side, hole }
 /// Draws a round for [scoreSoFar].
 ///
 /// The original is one of [BuiltRound.choices]. Each other icon follows the
-/// band for that score. An assembly appears at most once.
+/// band for that score. A decoy is never equal to the original, and an
+/// assembly appears at most once.
 BuiltRound buildRound({required int scoreSoFar, Random? random}) {
   final rng = random ?? Random();
   final original = _randomOriginal(rng);
@@ -60,8 +61,21 @@ BuiltRound buildRound({required int scoreSoFar, Random? random}) {
   if (decoys.length + 1 != expected) {
     throw StateError('Built ${decoys.length + 1} choices, expected $expected.');
   }
+  _requireDecoysDiffer(original, decoys);
   final choices = <Assembly>[original, ...decoys]..shuffle(rng);
   return BuiltRound(original: original, choices: List.unmodifiable(choices));
+}
+
+void _requireDecoysDiffer(Assembly original, List<Assembly> decoys) {
+  final seen = <Assembly>{};
+  for (final decoy in decoys) {
+    if (decoy == original) {
+      throw StateError('Decoy equals the original ($original).');
+    }
+    if (!seen.add(decoy)) {
+      throw StateError('Repeated decoy $decoy.');
+    }
+  }
 }
 
 Assembly _randomOriginal(Random rng) {
@@ -77,6 +91,7 @@ Assembly _randomOriginal(Random rng) {
     side: pair.$2,
     hole: HoleId.values[rng.nextInt(HoleId.values.length)],
     color: ColorId.values[rng.nextInt(ColorId.values.length)],
+    pulse: PulseId.values[rng.nextInt(PulseId.values.length)],
   );
 }
 
@@ -238,6 +253,7 @@ Assembly _randomEarly(
         ? _pickOther(HoleId.values, original.hole, rng)
         : original.hole,
     color: colors[rng.nextInt(colors.length)],
+    pulse: original.pulse,
   );
 }
 
@@ -257,6 +273,7 @@ Assembly _exhaustiveEarly(Assembly original, Set<Assembly> used, Random rng) {
                     side: side,
                     hole: hole,
                     color: color,
+                    pulse: original.pulse,
                   ),
   ]..shuffle(rng);
   for (final candidate in candidates) {
