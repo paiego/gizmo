@@ -1,0 +1,17 @@
+name: gizmo_api
+description: HTTP API for Gizmo.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  gizmo_rules:
+    path: ../packages/rules
+  postgres: ^3.5.6
+  shelf: ^1.4.2
+
+dev_dependencies:
+  lints: ^5.1.1
+  test: ^1.25.8
