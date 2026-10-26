@@ -108,17 +108,101 @@ jobs:
             args+=(--dart-define="API_BASE_URL=${API_BASE_URL}")
           fi
           "${args[@]}"
+          # Command-line build settings apply to every workspace target. Pods and
+          # SwiftPM targets reject a provisioning profile, so set manual signing
+          # only on the Runner app's Release configuration.
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          team = os.environ.get("TEAM_ID", "")
+          profile = os.environ.get("PROFILE_NAME", "")
+          if not team or not profile or "\n" in team or "\n" in profile:
+              sys.exit("TEAM_ID or PROFILE_NAME is missing.")
+
+          pbx_path = Path("ios/Runner.xcodeproj/project.pbxproj")
+          text = pbx_path.read_text()
+
+          def pbx_quote(value: str) -> str:
+              return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+          block_re = re.compile(
+              r"^[ \t]*[A-F0-9]{24} /\* Release \*/ = \{\n"
+              r"[ \t]*isa = XCBuildConfiguration;\n"
+              r".*?"
+              r"[ \t]*buildSettings = \{\n"
+              r"(?P<settings>.*?)"
+              r"[ \t]*\};\n"
+              r"[ \t]*name = Release;\n"
+              r"[ \t]*\};",
+              re.M | re.S,
+          )
+
+          def is_runner_release(settings: str) -> bool:
+              bundle = re.search(
+                  r"^[ \t]*PRODUCT_BUNDLE_IDENTIFIER = com\.paiego\.gizmo;\s*$",
+                  settings,
+                  re.M,
+              )
+              plist = re.search(
+                  r"^[ \t]*INFOPLIST_FILE = Runner/Info\.plist;\s*$",
+                  settings,
+                  re.M,
+              )
+              return bundle is not None and plist is not None
+
+          def upsert(settings: str, key: str, value: str) -> str:
+              pattern = re.compile(
+                  rf"^([ \t]*){re.escape(key)} = .*;[ \t]*\n",
+                  re.M,
+              )
+              indent_match = re.search(r"^([ \t]+)\S", settings, re.M)
+              indent = indent_match.group(1) if indent_match else "\t\t\t\t"
+              new_line = f"{indent}{key} = {value};\n"
+              if pattern.search(settings):
+                  return pattern.sub(new_line, settings, count=1)
+              if not settings.endswith("\n"):
+                  settings += "\n"
+              return settings + new_line
+
+          matches = [
+              match
+              for match in block_re.finditer(text)
+              if is_runner_release(match.group("settings"))
+          ]
+          if len(matches) != 1:
+              sys.exit(
+                  f"Expected one Runner Release configuration, found {len(matches)}."
+              )
+
+          match = matches[0]
+          settings = match.group("settings")
+          for key, value in [
+              ("CODE_SIGN_STYLE", "Manual"),
+              ("CODE_SIGN_IDENTITY", pbx_quote("Apple Distribution")),
+              ('"CODE_SIGN_IDENTITY[sdk=iphoneos*]"', pbx_quote("Apple Distribution")),
+              ("DEVELOPMENT_TEAM", pbx_quote(team)),
+              ("PROVISIONING_PROFILE_SPECIFIER", pbx_quote(profile)),
+          ]:
+              settings = upsert(settings, key, value)
+
+          updated = text[: match.start("settings")] + settings + text[match.end("settings") :]
+          if updated.count("PROVISIONING_PROFILE_SPECIFIER") != 1:
+              sys.exit("Provisioning profile was not limited to the Runner target.")
+          if updated.count("CODE_SIGN_STYLE = Manual") != 1:
+              sys.exit("Manual signing was not limited to the Runner target.")
+          pbx_path.write_text(updated)
+          print("Set manual distribution signing on the Runner Release target only.")
+          PY
           xcodebuild \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            "DEVELOPMENT_TEAM=${TEAM_ID}" \
-            "CODE_SIGN_IDENTITY=Apple Distribution" \
-            "PROVISIONING_PROFILE_SPECIFIER=${PROFILE_NAME}"
+            archive
           xcodebuild \
             -exportArchive \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
