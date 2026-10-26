@@ -1,2 +1,8 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
 #include "Generated.xcconfig"
+
+// Xcode omits UIRequiresFullScreen from the signed bundle when this setting is
+// empty, even if Info.plist has it. Portrait-only iPad builds need it set.
+INFOPLIST_KEY_UIRequiresFullScreen = YES
+INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait
+INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait
