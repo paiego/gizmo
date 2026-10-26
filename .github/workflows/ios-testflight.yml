@@ -49,8 +49,8 @@ jobs:
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
 
-          printf '%s' "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | openssl base64 -d -out "$CERT_PATH"
-          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" | openssl base64 -d -out "$PROFILE_PATH"
+          printf '%s' "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | tr -d '[:space:]' | openssl base64 -d -A -out "$CERT_PATH"
+          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" | tr -d '[:space:]' | openssl base64 -d -A -out "$PROFILE_PATH"
           security cms -D -i "$PROFILE_PATH" -o "$PROFILE_PLIST"
 
           APP_ID="$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$PROFILE_PLIST")"
@@ -103,7 +103,7 @@ jobs:
         working-directory: app
         run: |
           set -euo pipefail
-          args=(flutter build ios --release --config-only --build-number="${GITHUB_RUN_NUMBER}")
+          args=(flutter build ios --release --config-only --no-codesign --build-number="${GITHUB_RUN_NUMBER}")
           if [ -n "${API_BASE_URL}" ]; then
             args+=(--dart-define="API_BASE_URL=${API_BASE_URL}")
           fi
@@ -148,7 +148,7 @@ jobs:
             exit 1
           fi
           mkdir -p "$HOME/private_keys"
-          printf '%s' "$APP_STORE_CONNECT_KEY_BASE64" | openssl base64 -d -out "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          printf '%s' "$APP_STORE_CONNECT_KEY_BASE64" | tr -d '[:space:]' | openssl base64 -d -A -out "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
           xcrun altool --upload-app --type ios -f "$ipa" \
             --apiKey "$APP_STORE_CONNECT_KEY_ID" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
