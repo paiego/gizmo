@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 
 import '../game/session.dart';
@@ -13,10 +14,20 @@ import 'result_screen.dart';
 
 enum _Phase { look, gap, choose, correct, incorrect }
 
+enum _Edge { left, right, top, bottom }
+
+const _lookTime = Duration(milliseconds: 3000);
+const _gapTime = Duration(milliseconds: 400);
+const _correctTime = Duration(milliseconds: 400);
+const _travelTime = Duration(milliseconds: 400);
 const _exitSlide = Duration(milliseconds: 420);
 const _exitSettle = Duration(milliseconds: 380);
 const _exitDissolve = Duration(milliseconds: 450);
 const _compareFooter = 88.0;
+const _offscreenMargin = 16.0;
+
+double get _travelShare =>
+    _travelTime.inMilliseconds / _lookTime.inMilliseconds;
 
 double get _slideEnd => _exitSlide.inMilliseconds / _exitMilliseconds;
 
@@ -40,8 +51,15 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
   late final GameSession _session;
   late final AnimationController _look;
   late final AnimationController _exit;
+  late final AnimationController _enter;
+  late final AnimationController _cheer;
+  static const _cheerSound = MethodChannel('gizmo/cheer');
+  final _motion = math.Random();
   BuiltRound? _round;
   _Phase _phase = _Phase.look;
+  _Edge _enterEdge = _Edge.left;
+  _Edge _exitEdge = _Edge.right;
+  List<_Edge> _choiceEdges = const [];
   int? _tapped;
   Timer? _timer;
   var _alive = true;
@@ -50,14 +68,14 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _session = widget.session ?? GameSession();
-    _look = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3000),
-    )..addStatusListener(_onLook);
+    _look = AnimationController(vsync: this, duration: _lookTime)
+      ..addStatusListener(_onLook);
     _exit = AnimationController(
       vsync: this,
       duration: _exitSlide + _exitSettle + _exitDissolve,
     );
+    _enter = AnimationController(vsync: this, duration: _travelTime);
+    _cheer = AnimationController(vsync: this, duration: _correctTime);
     _startRound(notify: false);
   }
 
@@ -65,9 +83,14 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
     if (status != AnimationStatus.completed || !_alive) return;
     setState(() => _phase = _Phase.gap);
     _timer?.cancel();
-    _timer = Timer(const Duration(milliseconds: 400), () {
+    _timer = Timer(_gapTime, () {
       if (!_alive || !mounted) return;
+      _enter.value = 0;
       setState(() => _phase = _Phase.choose);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_alive || !mounted || _phase != _Phase.choose) return;
+        _enter.forward(from: 0);
+      });
     });
   }
 
@@ -76,15 +99,35 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
     _round = _session.deal();
     _tapped = null;
     _phase = _Phase.look;
+    _enterEdge = _pickEdge();
+    _exitEdge = _otherEdge(_enterEdge);
+    _choiceEdges = [
+      for (var index = 0; index < _round!.choices.length; index++) _pickEdge(),
+    ];
+    _enter.stop();
+    _enter.value = 0;
+    _cheer.stop();
+    _cheer.value = 0;
     _look.forward(from: 0);
     _exit.value = 0;
     if (notify && mounted) setState(() {});
+  }
+
+  _Edge _pickEdge() => _Edge.values[_motion.nextInt(_Edge.values.length)];
+
+  _Edge _otherEdge(_Edge avoid) {
+    final options = [
+      for (final edge in _Edge.values)
+        if (edge != avoid) edge,
+    ];
+    return options[_motion.nextInt(options.length)];
   }
 
   void _tap(int index) {
     if (_phase != _Phase.choose || !_alive) return;
     final round = _round!;
     final correct = round.choices[index] == round.original;
+    _enter.value = 1;
     setState(() {
       _tapped = index;
       _phase = correct ? _Phase.correct : _Phase.incorrect;
@@ -94,10 +137,28 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
       _exit.forward(from: 0);
       return;
     }
-    _timer = Timer(const Duration(milliseconds: 400), () {
+    _cheer.forward(from: 0);
+    _celebrate();
+    _timer = Timer(_correctTime, () {
       if (!_alive || !mounted) return;
       _finish(round: round, correct: true);
     });
+  }
+
+  void _celebrate() {
+    if (WidgetsBinding.instance is! WidgetsFlutterBinding) return;
+    HapticFeedback.successNotification();
+    unawaited(_playCheer());
+  }
+
+  Future<void> _playCheer() async {
+    try {
+      await _cheerSound.invokeMethod<void>('play');
+    } catch (_) {
+      try {
+        await SystemSound.play(SystemSoundType.click);
+      } catch (_) {}
+    }
   }
 
   void _continue() {
@@ -134,6 +195,8 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
     _look.removeStatusListener(_onLook);
     _look.dispose();
     _exit.dispose();
+    _enter.dispose();
+    _cheer.dispose();
     super.dispose();
   }
 
@@ -179,6 +242,11 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
                       tapped: _tapped,
                       look: _look,
                       exit: _exit,
+                      enter: _enter,
+                      cheer: _cheer,
+                      enterEdge: _enterEdge,
+                      exitEdge: _exitEdge,
+                      choiceEdges: _choiceEdges,
                       onTap: _tap,
                       onContinue: _continue,
                     ),
@@ -197,6 +265,11 @@ class _Board extends StatelessWidget {
     required this.tapped,
     required this.look,
     required this.exit,
+    required this.enter,
+    required this.cheer,
+    required this.enterEdge,
+    required this.exitEdge,
+    required this.choiceEdges,
     required this.onTap,
     required this.onContinue,
   });
@@ -206,6 +279,11 @@ class _Board extends StatelessWidget {
   final int? tapped;
   final Animation<double> look;
   final Animation<double> exit;
+  final Animation<double> enter;
+  final Animation<double> cheer;
+  final _Edge enterEdge;
+  final _Edge exitEdge;
+  final List<_Edge> choiceEdges;
   final ValueChanged<int> onTap;
   final VoidCallback onContinue;
 
@@ -215,16 +293,44 @@ class _Board extends StatelessWidget {
     if (phase == _Phase.look) {
       return LayoutBuilder(
         builder: (context, constraints) {
-          final size = math
-              .min(constraints.maxWidth - 48, 280.0)
-              .clamp(120.0, 280.0)
-              .toDouble();
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          final board = constraints.biggest;
+          final size =
+              math.min(board.width - 48, 280.0).clamp(120.0, 280.0).toDouble();
+          final block = size + 32;
+          final iconLeft = (board.width - size) / 2;
+          final iconTop = (board.height - block) / 2;
+          return Stack(
+            clipBehavior: Clip.hardEdge,
             children: [
-              IconView(assembly: round.original, size: size),
-              const SizedBox(height: 28),
-              _LookBar(animation: look, width: size * 0.72),
+              Positioned(
+                left: iconLeft,
+                top: iconTop,
+                width: size,
+                height: size,
+                child: AnimatedBuilder(
+                  animation: look,
+                  builder: (context, child) {
+                    return Transform.translate(
+                      offset: _lookTravel(
+                        t: look.value,
+                        enter: enterEdge,
+                        exit: exitEdge,
+                        board: board,
+                        origin: Offset(iconLeft, iconTop),
+                        extent: size,
+                      ),
+                      child: child,
+                    );
+                  },
+                  child: IconView(assembly: round.original, size: size),
+                ),
+              ),
+              Positioned(
+                left: iconLeft + size * 0.14,
+                top: iconTop + size + 28,
+                width: size * 0.72,
+                child: _LookBar(animation: look, width: size * 0.72),
+              ),
             ],
           );
         },
@@ -237,7 +343,7 @@ class _Board extends StatelessWidget {
         final board = constraints.biggest;
         final layout = _choiceLayout(board, round.choices.length);
         return AnimatedBuilder(
-          animation: exit,
+          animation: Listenable.merge([exit, enter, cheer]),
           builder: (context, _) {
             final t = phase == _Phase.incorrect ? exit.value : 0.0;
             final slide = _span(t, 0, _slideEnd, Curves.easeIn);
@@ -321,22 +427,52 @@ class _Board extends StatelessWidget {
       settle: settle,
       originalIndex: originalIndex,
     );
-    final mark = phase == _Phase.correct && index == tapped
+    final cheering = phase == _Phase.correct && index == tapped;
+    final pulse = cheering ? math.sin(cheer.value * math.pi) : 0.0;
+    final mark = cheering
         ? 1.0
         : phase == _Phase.incorrect && index == originalIndex
             ? 1 - dissolve
             : 0.0;
+    Widget icon = _Choice(
+      key: ValueKey(index),
+      assembly: round.choices[index],
+      size: layout.cell,
+      mark: mark,
+      onTap: phase == _Phase.choose ? () => onTap(index) : null,
+    );
+    if (pulse > 0) {
+      icon = Transform.scale(scale: 1 + (0.1 * pulse), child: icon);
+    }
     return Positioned(
       left: offset.dx,
       top: offset.dy,
       width: layout.cell,
       height: layout.cell,
-      child: _Choice(
-        key: ValueKey(index),
-        assembly: round.choices[index],
-        size: layout.cell,
-        mark: mark,
-        onTap: phase == _Phase.choose ? () => onTap(index) : null,
+      child: Stack(
+        clipBehavior: Clip.none,
+        fit: StackFit.expand,
+        children: [
+          icon,
+          if (cheering && pulse > 0)
+            IgnorePointer(
+              child: Opacity(
+                opacity: (1 - cheer.value).clamp(0.0, 1.0),
+                child: Transform.scale(
+                  scale: 0.82 + (0.46 * cheer.value),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: inkColor.withValues(alpha: 0.35),
+                        width: 3,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -360,7 +496,9 @@ class _Board extends StatelessWidget {
       final target = layout.pairSlot(index == originalIndex ? 0 : 1);
       return Offset.lerp(grid, target, settle)!;
     }
-    return grid;
+    final arrived = Curves.easeOutCubic.transform(enter.value.clamp(0.0, 1.0));
+    final travel = _edgeDelta(choiceEdges[index], grid, layout.cell, board);
+    return Offset.lerp(grid + travel, grid, arrived)!;
   }
 }
 
@@ -433,6 +571,41 @@ Offset _offscreen(
   final mid = slot.dx + layout.cell / 2;
   if (mid < board.width / 2) return Offset(-(slot.dx + layout.cell + 8), 0);
   return Offset(board.width - slot.dx + 8, 0);
+}
+
+Offset _edgeDelta(_Edge edge, Offset origin, double extent, Size board) {
+  switch (edge) {
+    case _Edge.left:
+      return Offset(-(origin.dx + extent + _offscreenMargin), 0);
+    case _Edge.right:
+      return Offset(board.width - origin.dx + _offscreenMargin, 0);
+    case _Edge.top:
+      return Offset(0, -(origin.dy + extent + _offscreenMargin));
+    case _Edge.bottom:
+      return Offset(0, board.height - origin.dy + _offscreenMargin);
+  }
+}
+
+Offset _lookTravel({
+  required double t,
+  required _Edge enter,
+  required _Edge exit,
+  required Size board,
+  required Offset origin,
+  required double extent,
+}) {
+  final inward = _edgeDelta(enter, origin, extent, board);
+  final outward = _edgeDelta(exit, origin, extent, board);
+  if (t < _travelShare) {
+    final u = Curves.easeOutCubic.transform(t / _travelShare);
+    return Offset.lerp(inward, Offset.zero, u)!;
+  }
+  if (t > 1 - _travelShare) {
+    final u =
+        Curves.easeInCubic.transform((t - (1 - _travelShare)) / _travelShare);
+    return Offset.lerp(Offset.zero, outward, u)!;
+  }
+  return Offset.zero;
 }
 
 double _span(double t, double begin, double end, Curve curve) {

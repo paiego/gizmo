@@ -119,6 +119,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 420));
 
     final screen = tester.getRect(find.byType(Scaffold));
+    expect(_peakScale(tester), closeTo(1, 0.01));
     expect(
         tester.getRect(find.byKey(ValueKey(leaver))).overlaps(screen), isFalse);
     expect(
@@ -169,6 +170,100 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pump();
     expect(find.byType(IconView), findsOneWidget);
+  });
+
+  testWidgets('the look icon slides in, rests, then leaves another way', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayScreen(
+          playerName: 'Paul',
+          session: GameSession(random: Random(2)),
+        ),
+      ),
+    );
+    await tester.pump();
+    final screen = tester.getRect(find.byType(Scaffold));
+    final enteredFrom = _outsideSide(
+      tester.getRect(find.byType(IconView)),
+      screen,
+    );
+
+    await tester.pump(const Duration(milliseconds: 1500));
+    final resting = tester.getRect(find.byType(IconView));
+    expect((resting.center.dx - screen.center.dx).abs(), lessThan(24));
+    expect((resting.center.dy - screen.center.dy).abs(), lessThan(90));
+    expect(resting.overlaps(screen), isTrue);
+
+    await tester.pump(const Duration(milliseconds: 1490));
+    expect(
+      _outsideSide(tester.getRect(find.byType(IconView)), screen),
+      isNot(enteredFrom),
+    );
+  });
+
+  testWidgets('choices slide in from the edges', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayScreen(
+          playerName: 'Paul',
+          session: GameSession(random: Random(3)),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 2999));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump();
+    expect(find.byType(IconView), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+    final screen = tester.getRect(find.byType(Scaffold));
+    final icons = find.byType(IconView);
+    expect(icons, findsNWidgets(3));
+    for (var index = 0; index < 3; index++) {
+      expect(screen.contains(tester.getRect(icons.at(index)).center), isFalse);
+    }
+
+    await tester.pump(const Duration(milliseconds: 400));
+    final centers = <Offset>[
+      for (var index = 0; index < 3; index++)
+        tester.getRect(icons.at(index)).center,
+    ];
+    for (final center in centers) {
+      expect(screen.contains(center), isTrue);
+    }
+    expect((centers[0] - centers[1]).distance, greaterThan(40));
+    expect((centers[1] - centers[2]).distance, greaterThan(40));
+  });
+
+  testWidgets('a correct pick celebrates, then the next look starts', (
+    tester,
+  ) async {
+    final round = buildRound(scoreSoFar: 0, random: Random(0));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayScreen(
+          playerName: 'Paul',
+          session: GameSession(random: Random(0)),
+        ),
+      ),
+    );
+    await _reachChoices(tester);
+    await tester.tap(
+      find.byKey(ValueKey(round.choices.indexOf(round.original))),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(_peakScale(tester), greaterThan(1.05));
+    expect(find.byType(IconView), findsNWidgets(3));
+    expect(find.text('Continue'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byType(IconView), findsOneWidget);
+    expect(find.text('Continue'), findsNothing);
   });
 
   test('a dealt round matches the score band', () {
@@ -235,6 +330,27 @@ Future<void> _reachChoices(WidgetTester tester) async {
   expect(find.byType(IconView), findsNothing);
 
   await tester.pump(const Duration(milliseconds: 400));
+  await tester.pump(const Duration(milliseconds: 400));
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+String _outsideSide(Rect icon, Rect screen) {
+  final center = icon.center;
+  if (center.dx < screen.left) return 'left';
+  if (center.dx > screen.right) return 'right';
+  if (center.dy < screen.top) return 'top';
+  if (center.dy > screen.bottom) return 'bottom';
+  fail('icon center ${icon.center} is still on screen');
+}
+
+double _peakScale(WidgetTester tester) {
+  var peak = 1.0;
+  for (final transform
+      in tester.widgetList<Transform>(find.byType(Transform))) {
+    final scale = transform.transform.getMaxScaleOnAxis();
+    if (scale > peak) peak = scale;
+  }
+  return peak;
 }
 
 class _FakeClient extends GizmoClient {
