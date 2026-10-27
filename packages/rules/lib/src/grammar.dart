@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 enum BodyId { disc, slab, wedge, arch }
 
 enum TopId { none, knob, horn, loop }
@@ -110,6 +112,33 @@ List<ColorId> nonAdjacentColors(ColorId color) {
   return [
     for (final candidate in colorRing)
       if (candidate != color && !adjacent.contains(candidate)) candidate,
+  ];
+}
+
+/// Floor for a decoy color, in Euclidean RGB distance (0 to about 441).
+const double minDecoyColorDistance = 100;
+
+/// Euclidean RGB distance between two catalog colors.
+double colorDistance(ColorId a, ColorId b) {
+  final left = colorValue[a]!;
+  final right = colorValue[b]!;
+  var sum = 0;
+  for (final shift in const [16, 8, 0]) {
+    final delta = ((left >> shift) & 0xFF) - ((right >> shift) & 0xFF);
+    sum += delta * delta;
+  }
+  return math.sqrt(sum);
+}
+
+/// Colors a decoy may use.
+///
+/// Skips the original and both ring neighbors, and keeps only colors at
+/// least [minDecoyColorDistance] away. The neighbor pairs orange/amber,
+/// red/pink, and green/teal sit under that floor.
+List<ColorId> distantColors(ColorId color) {
+  return [
+    for (final candidate in nonAdjacentColors(color))
+      if (colorDistance(color, candidate) >= minDecoyColorDistance) candidate,
   ];
 }
 

@@ -48,12 +48,12 @@ BuiltRound buildRound({required int scoreSoFar, Random? random}) {
     ];
   } else if (scoreSoFar <= 9) {
     decoys = [
-      ..._colorTwins(original, used),
+      ..._colorTwins(original, used, rng),
       for (final slot in _twoSlots(rng)) _oneSlot(original, used, rng, slot),
     ];
   } else {
     decoys = [
-      ..._colorTwins(original, used),
+      ..._colorTwins(original, used, rng),
       for (final slot in _Slot.values) _oneSlot(original, used, rng, slot),
     ];
   }
@@ -95,12 +95,21 @@ Assembly _randomOriginal(Random rng) {
   );
 }
 
-List<Assembly> _colorTwins(Assembly original, Set<Assembly> used) {
+/// Two same-shape decoys whose colors are far from [original].
+List<Assembly> _colorTwins(
+  Assembly original,
+  Set<Assembly> used,
+  Random rng,
+) {
+  final colors = distantColors(original.color)..shuffle(rng);
+  if (colors.length < 2) {
+    throw StateError('Need two distant colors for ${original.color}.');
+  }
   final twins = <Assembly>[];
-  for (final color in adjacentColors(original.color)) {
+  for (final color in colors.take(2)) {
     final candidate = original.copyWith(color: color);
     if (!used.add(candidate)) {
-      throw StateError('Adjacent color collided with $candidate.');
+      throw StateError('Distant color collided with $candidate.');
     }
     twins.add(candidate);
   }
@@ -144,7 +153,7 @@ Assembly _slotWithExtra(
 
 Assembly _keepBodySlotColor(Assembly original, Set<Assembly> used, Random rng) {
   final slots = _Slot.values.toList()..shuffle(rng);
-  final colors = nonAdjacentColors(original.color)..shuffle(rng);
+  final colors = distantColors(original.color)..shuffle(rng);
   for (final slot in slots) {
     for (final value in _slotValues(original, slot)..shuffle(rng)) {
       for (final color in colors) {
@@ -186,7 +195,7 @@ Assembly _bodySlotColor(Assembly original, Set<Assembly> used, Random rng) {
   final bodies = BodyId.values.where((body) => body != original.body).toList()
     ..shuffle(rng);
   final slots = _Slot.values.toList()..shuffle(rng);
-  final colors = nonAdjacentColors(original.color)..shuffle(rng);
+  final colors = distantColors(original.color)..shuffle(rng);
   for (final body in bodies) {
     final shifted = original.copyWith(body: body);
     for (final slot in slots) {
@@ -208,7 +217,7 @@ Assembly _bodySlotColor(Assembly original, Set<Assembly> used, Random rng) {
 
 Assembly _earlyDecoy(Assembly original, Set<Assembly> used, Random rng) {
   final bodies = BodyId.values.where((body) => body != original.body).toList();
-  final colors = nonAdjacentColors(original.color);
+  final colors = distantColors(original.color);
   for (var attempt = 0; attempt < 80; attempt++) {
     final candidate = _randomEarly(
       original,
@@ -261,7 +270,7 @@ Assembly _exhaustiveEarly(Assembly original, Set<Assembly> used, Random rng) {
   final candidates = <Assembly>[
     for (final body in BodyId.values)
       if (body != original.body)
-        for (final color in nonAdjacentColors(original.color))
+        for (final color in distantColors(original.color))
           for (final top in TopId.values)
             for (final side in SideId.values)
               if ((top != TopId.none || side != SideId.none) &&

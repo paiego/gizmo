@@ -35,6 +35,37 @@ void main() {
     expect(colorValue, hasLength(8));
   });
 
+  test('a decoy color stays at least 100 away in RGB', () {
+    var minimum = double.infinity;
+    final closest = <(ColorId, ColorId)>[];
+    for (final color in ColorId.values) {
+      final distant = distantColors(color);
+      expect(distant.length, greaterThanOrEqualTo(2));
+      expect(distant, isNot(contains(color)));
+      for (final neighbor in adjacentColors(color)) {
+        expect(distant, isNot(contains(neighbor)));
+      }
+      for (final other in distant) {
+        final distance = colorDistance(color, other);
+        expect(distance, greaterThanOrEqualTo(minDecoyColorDistance));
+        if (distance < minimum - 1e-9) {
+          minimum = distance;
+          closest
+            ..clear()
+            ..add((color, other));
+        } else if ((distance - minimum).abs() <= 1e-9) {
+          closest.add((color, other));
+        }
+      }
+    }
+    expect(minimum, colorDistance(ColorId.red, ColorId.amber));
+    expect(minimum, greaterThan(minDecoyColorDistance));
+    expect(closest, [
+      (ColorId.red, ColorId.amber),
+      (ColorId.amber, ColorId.red),
+    ]);
+  });
+
   test('choice count follows the score bands', () {
     expect(choiceCountForScore(0), 3);
     expect(choiceCountForScore(2), 3);
@@ -120,8 +151,12 @@ void main() {
         for (final decoy in decoys) {
           expect(decoy.body, isNot(round.original.body));
           expect(
-            nonAdjacentColors(round.original.color),
+            distantColors(round.original.color),
             contains(decoy.color),
+          );
+          expect(
+            colorDistance(round.original.color, decoy.color),
+            greaterThanOrEqualTo(minDecoyColorDistance),
           );
           expect(
             decoy.top != round.original.top ||
@@ -147,7 +182,7 @@ void main() {
   }
 
   for (final score in [6, 7, 8, 9]) {
-    test('score $score uses adjacent colors and two different slots', () {
+    test('score $score uses distant colors and two different slots', () {
       for (var seed = 0; seed < 25; seed++) {
         final round = buildRound(scoreSoFar: score, random: Random(seed));
         expectRoundShape(round, score);
@@ -157,7 +192,7 @@ void main() {
   }
 
   for (final score in [10, 11, 25]) {
-    test('score $score uses adjacent colors and every slot', () {
+    test('score $score uses distant colors and every slot', () {
       for (var seed = 0; seed < 25; seed++) {
         final round = buildRound(scoreSoFar: score, random: Random(seed));
         expectRoundShape(round, score);
@@ -204,12 +239,12 @@ void expectMidRoles(Assembly original, List<Assembly> decoys) {
   for (final decoy in decoys) {
     final slots = slotChanges(original, decoy);
     final bodyChanged = decoy.body != original.body;
-    final nonAdjacent = nonAdjacentColors(original.color).contains(decoy.color);
-    if (!bodyChanged && slots == 1 && nonAdjacent) {
+    final distant = distantColors(original.color).contains(decoy.color);
+    if (!bodyChanged && slots == 1 && distant) {
       keepBody += 1;
     } else if (bodyChanged && decoy.color == original.color && slots == 0) {
       bodyOnly += 1;
-    } else if (bodyChanged && slots == 1 && nonAdjacent) {
+    } else if (bodyChanged && slots == 1 && distant) {
       bodySlot += 1;
     } else {
       fail('Decoy $decoy does not match a mid-band role for $original.');
@@ -228,12 +263,21 @@ void expectHighBand(
   List<Assembly> decoys, {
   required int slots,
 }) {
-  final adjacent = adjacentColors(original.color).toSet();
+  final distant = distantColors(original.color).toSet();
   final colorDecoys = [
     for (final decoy in decoys)
-      if (sameShape(decoy, original) && adjacent.contains(decoy.color)) decoy,
+      if (sameShape(decoy, original)) decoy,
   ];
-  expect(colorDecoys.map((decoy) => decoy.color).toSet(), adjacent);
+  expect(colorDecoys, hasLength(2));
+  final colors = colorDecoys.map((decoy) => decoy.color).toSet();
+  expect(colors, hasLength(2));
+  expect(distant.containsAll(colors), isTrue);
+  for (final decoy in colorDecoys) {
+    expect(
+      colorDistance(original.color, decoy.color),
+      greaterThanOrEqualTo(minDecoyColorDistance),
+    );
+  }
 
   final slotDecoys = [
     for (final decoy in decoys)
