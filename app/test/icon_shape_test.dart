@@ -233,6 +233,46 @@ void main() {
     expect(rimLater.shouldRepaint(rim), isTrue);
     expect(IconPainter.paintCount, greaterThan(painted));
   });
+
+  testWidgets('each rim icon keeps one outline weight at the same speed', (
+    tester,
+  ) async {
+    const count = 24;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Wrap(
+            children: [
+              for (var index = 0; index < count; index++)
+                IconView(assembly: _pulsed(PulseId.rim), size: 48),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final before = [
+      for (var index = 0; index < count; index++) _painter(tester, index),
+    ];
+    expect(OutlineWeight.values, [OutlineWeight.thin, OutlineWeight.thick]);
+    expect(OutlineWeight.thin.units, 4);
+    expect(OutlineWeight.thick.units, 10);
+    final weights = before.map((painter) => painter.outline).toSet();
+    expect(weights, {OutlineWeight.thin, OutlineWeight.thick});
+    for (final painter in before) {
+      expect(painter.assembly.pulse, PulseId.rim);
+    }
+
+    await tester.pump(const Duration(milliseconds: 250));
+    final later = [
+      for (var index = 0; index < count; index++) _painter(tester, index),
+    ];
+    expect(later.map((painter) => painter.phase).toSet().length, 1);
+    expect(later.first.phase, isNot(before.first.phase));
+    for (var index = 0; index < count; index++) {
+      expect(later[index].outline, before[index].outline);
+    }
+  });
 }
 
 Assembly _pulsed(PulseId pulse) {

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -12,7 +13,8 @@ import 'icon_paths.dart';
 /// and a missing scope paints [warmPalette].
 ///
 /// [PulseId.core] and [PulseId.rim] brighten and dim on a one-second loop.
-/// [PulseId.none] stays still.
+/// [PulseId.none] stays still. A rim icon draws one outline and keeps a single
+/// weight chosen for that instance. Every weight uses the same loop.
 class IconView extends StatefulWidget {
   const IconView({
     super.key,
@@ -34,12 +36,14 @@ class _IconViewState extends State<IconView>
   static const _halfLoop = Duration(milliseconds: 500);
 
   AnimationController? _controller;
+  late final OutlineWeight _outline;
 
   bool get _pulsing => widget.assembly.pulse != PulseId.none;
 
   @override
   void initState() {
     super.initState();
+    _outline = OutlineWeight.pick(math.Random());
     if (_pulsing) _start();
   }
 
@@ -77,7 +81,11 @@ class _IconViewState extends State<IconView>
     if (controller == null || !controller.isAnimating) {
       return _frame(
         CustomPaint(
-          painter: IconPainter(widget.assembly, colors),
+          painter: IconPainter(
+            widget.assembly,
+            colors,
+            outline: _outline,
+          ),
           size: Size.square(widget.size),
         ),
       );
@@ -91,6 +99,7 @@ class _IconViewState extends State<IconView>
               widget.assembly,
               colors,
               phase: Curves.easeInOut.transform(controller.value),
+              outline: _outline,
             ),
             size: Size.square(widget.size),
           );
@@ -104,14 +113,36 @@ class _IconViewState extends State<IconView>
   }
 }
 
+/// One rim outline. [thick] is the original 10-unit stroke.
+enum OutlineWeight {
+  thin(4),
+  thick(10);
+
+  const OutlineWeight(this.units);
+
+  /// Stroke width in the 100-unit icon box, before the cell scale.
+  final double units;
+
+  static OutlineWeight pick(math.Random random) =>
+      values[random.nextInt(values.length)];
+}
+
 class IconPainter extends CustomPainter {
-  const IconPainter(this.assembly, this.palette, {this.phase = 0});
+  const IconPainter(
+    this.assembly,
+    this.palette, {
+    this.phase = 0,
+    this.outline = OutlineWeight.thick,
+  });
 
   final Assembly assembly;
   final IconPalette palette;
 
   /// 0 is the dim end of a pulse and 1 is the bright end. Already eased.
   final double phase;
+
+  /// The one outline this icon would draw. Ignored unless the pulse is rim.
+  final OutlineWeight outline;
 
   @visibleForTesting
   static int paintCount = 0;
@@ -180,7 +211,7 @@ class IconPainter extends CustomPainter {
         iconOutline(assembly).transform(matrix),
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 10 * scale
+          ..strokeWidth = outline.units * scale
           ..strokeJoin = StrokeJoin.round
           ..color = ink
           ..isAntiAlias = true,
@@ -193,7 +224,8 @@ class IconPainter extends CustomPainter {
   bool shouldRepaint(IconPainter oldDelegate) =>
       oldDelegate.assembly != assembly ||
       oldDelegate.palette != palette ||
-      oldDelegate.phase != phase;
+      oldDelegate.phase != phase ||
+      oldDelegate.outline != outline;
 }
 
 Float64List _scaleMatrix(double scale) {
