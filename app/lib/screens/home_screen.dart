@@ -1,32 +1,29 @@
 import 'package:flutter/material.dart';
-import 'package:gizmo_rules/gizmo_rules.dart';
 
+import '../account/account.dart';
+import '../account/account_repository.dart';
+import '../account/profile_pictures.dart';
 import '../api/gizmo_client.dart';
-import '../name_store.dart';
 import '../nav.dart';
 import '../theme.dart';
 import '../widgets/gizmo_button.dart';
 import 'leaderboard_screen.dart';
-import 'name_screen.dart';
 import 'play_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
-    required this.playerName,
+    required this.account,
     required this.client,
-    required this.names,
-    required this.palette,
-    required this.onPlayerName,
-    required this.onPalette,
+    required this.repository,
+    required this.onAccount,
   });
 
-  final String playerName;
+  final GizmoAccount account;
   final GizmoClient client;
-  final NameStore names;
-  final IconPalette palette;
-  final ValueChanged<String> onPlayerName;
-  final ValueChanged<IconPalette> onPalette;
+  final AccountRepository repository;
+  final ValueChanged<GizmoAccount> onAccount;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -42,6 +39,14 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.account.username != widget.account.username) {
+      _load();
+    }
   }
 
   @override
@@ -72,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       _error = null;
     });
     try {
-      final summary = await widget.client.fetchBest(widget.playerName);
+      final summary = await widget.client.fetchBest(widget.account.username!);
       if (!mounted) return;
       setState(() {
         _summary = summary;
@@ -88,208 +93,144 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     }
   }
 
-  Future<void> _changeName() async {
-    final next = await Navigator.push<String>(
+  void _openProfile() {
+    Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => NameScreen(
-          initialName: widget.playerName,
-          popOnSave: true,
-          onSubmit: widget.names.write,
+        builder: (context) => ProfileScreen(
+          account: widget.account,
+          repository: widget.repository,
+          onAccount: widget.onAccount,
         ),
       ),
     );
-    if (next != null && next != widget.playerName) {
-      widget.onPlayerName(next);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final look = GizmoLook.of(context);
+    final picture = pictureById(widget.account.pictureId);
     final best = _summary?.bestScore;
     final runs = _summary?.runCount;
     return Scaffold(
-      backgroundColor: boardColor,
+      backgroundColor: look.board,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
+          padding: const EdgeInsets.fromLTRB(24, 8, 8, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Gizmo',
-                style: TextStyle(fontSize: 16, color: mutedColor),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                widget.playerName,
-                style: const TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.6,
-                ),
-              ),
-              const SizedBox(height: 28),
               Row(
                 children: [
-                  _Stat(
-                    label: 'Best',
-                    value: _loading
-                        ? '…'
-                        : best == null
-                            ? '—'
-                            : '$best',
+                  Expanded(
+                    child: Text(
+                      'Gizmo',
+                      style: TextStyle(fontSize: 16, color: look.muted),
+                    ),
                   ),
-                  const SizedBox(width: 12),
-                  _Stat(
-                    label: 'Runs',
-                    value: _loading
-                        ? '…'
-                        : runs == null
-                            ? '—'
-                            : '$runs',
+                  IconButton(
+                    key: const ValueKey('open-profile'),
+                    tooltip: 'Profile',
+                    onPressed: _openProfile,
+                    icon: Icon(Icons.settings, color: look.ink),
                   ),
                 ],
               ),
-              if (_error != null) ...[
-                const SizedBox(height: 16),
-                Text(_error!, style: const TextStyle(color: mutedColor)),
-              ],
-              const Spacer(),
-              const Text(
-                'Colors',
-                style: TextStyle(fontSize: 16, color: mutedColor),
-              ),
-              const SizedBox(height: 8),
-              _PalettePicker(
-                selected: widget.palette,
-                onSelected: widget.onPalette,
-              ),
-              const SizedBox(height: 16),
-              GizmoButton(
-                label: 'Play',
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          PlayScreen(playerName: widget.playerName),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              GizmoButton(
-                label: 'Leaderboard',
-                filled: false,
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LeaderboardScreen(
-                        playerName: widget.playerName,
-                        client: widget.client,
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: picture.color,
                       ),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              GizmoButton(
-                label: 'Change name',
-                filled: false,
-                onPressed: _changeName,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PalettePicker extends StatelessWidget {
-  const _PalettePicker({required this.selected, required this.onSelected});
-
-  final IconPalette selected;
-  final ValueChanged<IconPalette> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var i = 0; i < iconPalettes.length; i++) ...[
-          if (i > 0) const SizedBox(width: 6),
-          Expanded(
-            child: _PaletteChoice(
-              palette: iconPalettes[i],
-              selected: iconPalettes[i] == selected,
-              onSelected: onSelected,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _PaletteChoice extends StatelessWidget {
-  const _PaletteChoice({
-    required this.palette,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final IconPalette palette;
-  final bool selected;
-  final ValueChanged<IconPalette> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: palette.label,
-      child: InkWell(
-        onTap: () => onSelected(palette),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          key: ValueKey('palette-${palette.id}'),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? inkColor : const Color(0xFFD5D5D5),
-              width: 1.5,
-            ),
-          ),
-          child: Column(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: SizedBox(
-                  height: 16,
-                  child: Row(
-                    children: [
-                      for (final color in colorRing)
-                        Expanded(
-                          child: ColoredBox(
-                            color: Color(palette.values[color]!),
-                          ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        widget.account.username ?? '',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.6,
+                          color: look.ink,
                         ),
-                    ],
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                palette.label,
-                maxLines: 1,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  color: selected ? inkColor : mutedColor,
+              const SizedBox(height: 28),
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Row(
+                  children: [
+                    _Stat(
+                      label: 'Best',
+                      value: _loading
+                          ? '…'
+                          : best == null
+                              ? '—'
+                              : '$best',
+                    ),
+                    const SizedBox(width: 12),
+                    _Stat(
+                      label: 'Runs',
+                      value: _loading
+                          ? '…'
+                          : runs == null
+                              ? '—'
+                              : '$runs',
+                    ),
+                  ],
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Text(_error!, style: TextStyle(color: look.muted)),
+                ),
+              ],
+              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Column(
+                  children: [
+                    GizmoButton(
+                      label: 'Play',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => PlayScreen(
+                              playerName: widget.account.username!,
+                              adminMode: widget.account.playingAdmin,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    GizmoButton(
+                      label: 'Leaderboard',
+                      filled: false,
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => LeaderboardScreen(
+                              playerName: widget.account.username!,
+                              client: widget.client,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -308,21 +249,26 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final look = GizmoLook.of(context);
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         decoration: BoxDecoration(
-          color: paperColor,
+          color: look.paper,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(color: mutedColor)),
+            Text(label, style: TextStyle(color: look.muted)),
             const SizedBox(height: 6),
             Text(
               value,
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w600,
+                color: look.ink,
+              ),
             ),
           ],
         ),

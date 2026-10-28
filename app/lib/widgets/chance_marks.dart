@@ -9,6 +9,7 @@ class ChanceMarks extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ink = GizmoLook.of(context).ink;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -19,8 +20,8 @@ class ChanceMarks extends StatelessWidget {
             margin: EdgeInsets.only(left: index == 0 ? 0 : 6),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: index < remaining ? inkColor : const Color(0x00000000),
-              border: Border.all(color: inkColor, width: 2),
+              color: index < remaining ? ink : const Color(0x00000000),
+              border: Border.all(color: ink, width: 2),
             ),
           ),
       ],

@@ -36,12 +36,17 @@ void main() {
     expect(client.bestCalls, 1);
   });
 
-  testWidgets('home offers palettes and play uses the one you pick', (
+  testWidgets('profile holds themes and play uses the one you pick', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({NameStore.storageKey: 'Paul'});
+    _usePhoneSurface(tester);
     await tester
         .pumpWidget(GizmoApp(client: _FakeClient(), names: NameStore()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Colors'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('open-profile')));
     await tester.pumpAndSettle();
 
     expect(find.text('Warm'), findsOneWidget);
@@ -52,14 +57,23 @@ void main() {
 
     await tester.tap(find.text('Cold'));
     await tester.pumpAndSettle();
-    expect(_paletteBorder(tester, 'cold'), inkColor);
-    expect(_paletteBorder(tester, 'warm'), isNot(inkColor));
+    expect(_paletteBorder(tester, 'cold'), coldLook.ink);
+    expect(_paletteBorder(tester, 'warm'), isNot(coldLook.ink));
 
-    await tester
-        .pumpWidget(GizmoApp(client: _FakeClient(), names: NameStore()));
+    await tester.pumpWidget(
+      GizmoApp(
+        key: const ValueKey('reloaded'),
+        client: _FakeClient(),
+        names: NameStore(),
+      ),
+    );
     await tester.pumpAndSettle();
-    expect(_paletteBorder(tester, 'cold'), inkColor);
+    await tester.tap(find.byKey(const ValueKey('open-profile')));
+    await tester.pumpAndSettle();
+    expect(_paletteBorder(tester, 'cold'), coldLook.ink);
 
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Play'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
@@ -266,6 +280,45 @@ void main() {
     expect(find.text('Continue'), findsNothing);
   });
 
+  testWidgets('the profile gear opens account settings', (tester) async {
+    SharedPreferences.setMockInitialValues({NameStore.storageKey: 'Paul'});
+    _usePhoneSurface(tester);
+    await tester
+        .pumpWidget(GizmoApp(client: _FakeClient(), names: NameStore()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Change name'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('open-profile')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('No Firebase id yet'), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
+    expect(
+      tester
+          .widget<SwitchListTile>(
+              find.widgetWithText(SwitchListTile, 'Admin mode'))
+          .onChanged,
+      isNull,
+    );
+
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Admin'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<SwitchListTile>(
+              find.widgetWithText(SwitchListTile, 'Admin mode'))
+          .onChanged,
+      isNotNull,
+    );
+
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('google-services.json'), findsOneWidget);
+    expect(find.textContaining('GoogleService-Info.plist'), findsOneWidget);
+    expect(find.text('No Firebase id yet'), findsOneWidget);
+  });
+
   test('a dealt round matches the score band', () {
     final session = GameSession();
     final round = session.deal();
@@ -296,6 +349,12 @@ void _expectPalette(WidgetTester tester, IconPalette palette) {
       isNot(colorValue[view.assembly.color]),
     );
   }
+}
+
+void _usePhoneSurface(WidgetTester tester) {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = const Size(480, 1000);
+  addTearDown(tester.view.reset);
 }
 
 Color _paletteBorder(WidgetTester tester, String id) {

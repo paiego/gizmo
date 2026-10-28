@@ -60,27 +60,28 @@ class _NameScreenState extends State<NameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final look = GizmoLook.of(context);
     return Scaffold(
-      backgroundColor: boardColor,
+      backgroundColor: look.board,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Gizmo',
                 style: TextStyle(
                   fontSize: 40,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.8,
-                  color: inkColor,
+                  color: look.ink,
                 ),
               ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'What should we call you?',
-                style: TextStyle(fontSize: 18, color: mutedColor),
+                style: TextStyle(fontSize: 18, color: look.muted),
               ),
               const SizedBox(height: 28),
               TextField(
@@ -97,7 +98,7 @@ class _NameScreenState extends State<NameScreen> {
                   hintText: 'Name',
                   errorText: _error,
                   filled: true,
-                  fillColor: paperColor,
+                  fillColor: look.paper,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,

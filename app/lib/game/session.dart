@@ -20,9 +20,13 @@ class PlayedRound {
 
 /// One run. Chances start at three and do not refill.
 class GameSession {
-  GameSession({Random? random}) : _random = random ?? Random();
+  GameSession({Random? random, this.adminMode = false})
+      : _random = random ?? Random();
 
   final Random _random;
+
+  /// Misses do not end the run. The score still climbs so later layouts appear.
+  final bool adminMode;
   final List<PlayedRound> rounds = [];
   int score = 0;
   int chances = 3;
@@ -55,10 +59,10 @@ class GameSession {
     );
     if (correct) {
       score += 1;
-    } else {
+    } else if (!adminMode) {
       chances -= 1;
     }
-    return chances == 0;
+    return !adminMode && chances == 0;
   }
 
   SubmittedRun transcript(String playerName) {

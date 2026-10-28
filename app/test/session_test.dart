@@ -47,6 +47,28 @@ void main() {
     }
   });
 
+  test('admin mode keeps going after misses and the score still climbs', () {
+    final session = GameSession(random: Random(9), adminMode: true);
+    var finished = false;
+    for (var turn = 0; turn < 3; turn++) {
+      final round = session.deal();
+      finished = session.answer(round: round, correct: false);
+    }
+    expect(finished, isFalse);
+    expect(session.chances, 3);
+    expect(session.score, 0);
+
+    for (var turn = 0; turn < 7; turn++) {
+      final round = session.deal();
+      expect(round.choiceCount, choiceCountForScore(session.score));
+      finished = session.answer(round: round, correct: true);
+    }
+    expect(finished, isFalse);
+    expect(session.score, 7);
+    expect(session.chances, 3);
+    expect(session.deal().choiceCount, choiceCountForScore(7));
+  });
+
   test('leaving before three misses is not a finished run', () {
     final session = GameSession(random: Random(5));
     final round = session.deal();

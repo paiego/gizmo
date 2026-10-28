@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:gizmo_rules/gizmo_rules.dart';
 
+import 'account/account.dart';
+import 'account/account_repository.dart';
 import 'api/gizmo_client.dart';
 import 'name_store.dart';
 import 'nav.dart';
@@ -19,11 +20,18 @@ Future<void> main() async {
 }
 
 class GizmoApp extends StatefulWidget {
-  const GizmoApp({super.key, this.client, this.names, this.palettes});
+  const GizmoApp({
+    super.key,
+    this.client,
+    this.names,
+    this.palettes,
+    this.accounts,
+  });
 
   final GizmoClient? client;
   final NameStore? names;
   final PaletteStore? palettes;
+  final AccountRepository? accounts;
 
   @override
   State<GizmoApp> createState() => _GizmoAppState();
@@ -31,10 +39,9 @@ class GizmoApp extends StatefulWidget {
 
 class _GizmoAppState extends State<GizmoApp> {
   late final GizmoClient _client = widget.client ?? GizmoClient();
-  late final NameStore _names = widget.names ?? NameStore();
-  late final PaletteStore _palettes = widget.palettes ?? PaletteStore();
-  String? _name;
-  IconPalette _palette = warmPalette;
+  late final AccountRepository _accounts = widget.accounts ??
+      AccountRepository(names: widget.names, palettes: widget.palettes);
+  GizmoAccount _account = const GizmoAccount();
   var _ready = false;
 
   @override
@@ -44,51 +51,43 @@ class _GizmoAppState extends State<GizmoApp> {
   }
 
   Future<void> _load() async {
-    final name = await _names.read();
-    final paletteId = await _palettes.read();
+    final account = await _accounts.read();
     if (!mounted) return;
     setState(() {
-      _name = name;
-      _palette = paletteById(paletteId);
+      _account = account;
       _ready = true;
     });
   }
 
-  Future<void> _save(String name) async {
-    await _names.write(name);
+  Future<void> _saveName(String name) async {
+    final next = _account.copyWith(username: name);
+    await _accounts.save(next);
     if (!mounted) return;
-    setState(() => _name = name);
-  }
-
-  Future<void> _selectPalette(IconPalette palette) async {
-    await _palettes.write(palette.id);
-    if (!mounted) return;
-    setState(() => _palette = palette);
+    setState(() => _account = next);
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = _name;
+    final look = lookById(_account.themeId);
+    final name = _account.username;
     return PaletteScope(
-      palette: _palette,
+      palette: look.icons,
       child: GizmoScope(
         client: _client,
         child: MaterialApp(
           title: 'Gizmo',
           debugShowCheckedModeBanner: false,
-          theme: buildGizmoTheme(),
+          theme: buildGizmoTheme(look),
           navigatorObservers: [gizmoRouteObserver],
           home: !_ready
-              ? const Scaffold(backgroundColor: boardColor)
+              ? Scaffold(backgroundColor: look.board)
               : name == null
-                  ? NameScreen(onSubmit: _save)
+                  ? NameScreen(onSubmit: _saveName)
                   : HomeScreen(
-                      playerName: name,
+                      account: _account,
                       client: _client,
-                      names: _names,
-                      palette: _palette,
-                      onPlayerName: (value) => setState(() => _name = value),
-                      onPalette: _selectPalette,
+                      repository: _accounts,
+                      onAccount: (value) => setState(() => _account = value),
                     ),
         ),
       ),

@@ -41,32 +41,33 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final look = GizmoLook.of(context);
     final mine = parsePlayerName(widget.playerName)?.key;
     return Scaffold(
-      backgroundColor: boardColor,
+      backgroundColor: look.board,
       appBar: AppBar(
-        backgroundColor: boardColor,
-        foregroundColor: inkColor,
+        backgroundColor: look.board,
+        foregroundColor: look.ink,
         elevation: 0,
         title: const Text('Leaderboard'),
       ),
-      body: _buildBody(mine),
+      body: _buildBody(mine, look),
     );
   }
 
-  Widget _buildBody(String? mine) {
+  Widget _buildBody(String? mine, GizmoLook look) {
     if (_error != null) {
       return Center(
-        child: Text(_error!, style: const TextStyle(color: mutedColor)),
+        child: Text(_error!, style: TextStyle(color: look.muted)),
       );
     }
     final entries = _entries;
     if (entries == null) {
-      return const Center(child: CircularProgressIndicator(color: inkColor));
+      return Center(child: CircularProgressIndicator(color: look.ink));
     }
     if (entries.isEmpty) {
-      return const Center(
-        child: Text('No scores yet.', style: TextStyle(color: mutedColor)),
+      return Center(
+        child: Text('No scores yet.', style: TextStyle(color: look.muted)),
       );
     }
     return ListView.separated(
@@ -80,10 +81,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: marked ? const Color(0xFFE2E2E2) : paperColor,
+            color: marked ? look.line : look.paper,
             borderRadius: BorderRadius.circular(12),
             border: marked
-                ? const Border(left: BorderSide(color: inkColor, width: 4))
+                ? Border(left: BorderSide(color: look.ink, width: 4))
                 : null,
           ),
           child: Row(
@@ -92,20 +93,24 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 width: 32,
                 child: Text(
                   '${entry.rank}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: look.ink,
+                  ),
                 ),
               ),
               Expanded(
                 child: Text(
                   entry.playerName,
-                  style: const TextStyle(fontSize: 16),
+                  style: TextStyle(fontSize: 16, color: look.ink),
                 ),
               ),
               Text(
                 '${entry.bestScore}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
+                  color: look.ink,
                 ),
               ),
             ],

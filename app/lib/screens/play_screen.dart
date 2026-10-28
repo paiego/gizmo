@@ -38,10 +38,16 @@ double get _exitMilliseconds =>
     (_exitSlide + _exitSettle + _exitDissolve).inMilliseconds.toDouble();
 
 class PlayScreen extends StatefulWidget {
-  const PlayScreen({super.key, required this.playerName, this.session});
+  const PlayScreen({
+    super.key,
+    required this.playerName,
+    this.session,
+    this.adminMode = false,
+  });
 
   final String playerName;
   final GameSession? session;
+  final bool adminMode;
 
   @override
   State<PlayScreen> createState() => _PlayScreenState();
@@ -67,7 +73,7 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _session = widget.session ?? GameSession();
+    _session = widget.session ?? GameSession(adminMode: widget.adminMode);
     _look = AnimationController(vsync: this, duration: _lookTime)
       ..addStatusListener(_onLook);
     _exit = AnimationController(
@@ -180,6 +186,7 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
           builder: (context) => ResultScreen(
             playerName: widget.playerName,
             transcript: _session.transcript(widget.playerName),
+            adminMode: widget.adminMode,
           ),
         ),
       );
@@ -203,8 +210,9 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final round = _round;
+    final chrome = GizmoLook.of(context);
     return Scaffold(
-      backgroundColor: boardColor,
+      backgroundColor: chrome.board,
       body: SafeArea(
         child: Column(
           children: [
@@ -215,19 +223,27 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
                   IconButton(
                     tooltip: 'Leave',
                     onPressed: () => Navigator.maybePop(context),
-                    icon: const Icon(Icons.arrow_back, color: inkColor),
+                    icon: Icon(Icons.arrow_back, color: chrome.ink),
                   ),
-                  const Text(
+                  Text(
                     'Score ',
-                    style: TextStyle(fontSize: 16, color: mutedColor),
+                    style: TextStyle(fontSize: 16, color: chrome.muted),
                   ),
                   Text(
                     '${_session.score}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
+                      color: chrome.ink,
                     ),
                   ),
+                  if (widget.adminMode) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      'Admin',
+                      style: TextStyle(fontSize: 13, color: chrome.muted),
+                    ),
+                  ],
                   const Spacer(),
                   ChanceMarks(remaining: _session.chances),
                 ],
@@ -363,6 +379,7 @@ class _Board extends StatelessWidget {
               children: [
                 for (var index = 0; index < round.choices.length; index++)
                   _placed(
+                    context: context,
                     index: index,
                     layout: layout,
                     board: board,
@@ -379,7 +396,7 @@ class _Board extends StatelessWidget {
                     child: IgnorePointer(
                       child: Opacity(
                         opacity: dissolve,
-                        child: const FittedBox(
+                        child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
                             'original',
@@ -387,7 +404,7 @@ class _Board extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: inkColor,
+                              color: GizmoLook.of(context).ink,
                             ),
                           ),
                         ),
@@ -411,6 +428,7 @@ class _Board extends StatelessWidget {
   }
 
   Widget _placed({
+    required BuildContext context,
     required int index,
     required _ChoiceLayout layout,
     required Size board,
@@ -464,7 +482,8 @@ class _Board extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                        color: inkColor.withValues(alpha: 0.35),
+                        color:
+                            GizmoLook.of(context).ink.withValues(alpha: 0.35),
                         width: 3,
                       ),
                     ),
@@ -630,6 +649,7 @@ class _Choice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final chrome = GizmoLook.of(context);
     return Material(
       color: const Color(0x00000000),
       child: InkWell(
@@ -650,7 +670,7 @@ class _Choice extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: inkColor.withValues(alpha: mark),
+                        color: chrome.ink.withValues(alpha: mark),
                         width: 3,
                       ),
                     ),
@@ -672,6 +692,7 @@ class _LookBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final chrome = GizmoLook.of(context);
     return AnimatedBuilder(
       animation: animation,
       builder: (context, _) {
@@ -681,7 +702,7 @@ class _LookBar extends StatelessWidget {
           height: 4,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xFFD5D5D5),
+              color: chrome.line,
               borderRadius: BorderRadius.circular(2),
             ),
             child: Align(
@@ -691,7 +712,7 @@ class _LookBar extends StatelessWidget {
                 heightFactor: 1,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: inkColor,
+                    color: chrome.ink,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
