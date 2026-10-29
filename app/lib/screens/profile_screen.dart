@@ -73,10 +73,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       setState(() => _account = next);
       widget.onAccount(next);
-    } on FirebaseConfigMissing catch (error) {
+    } on GoogleSignInCanceled catch (error) {
       if (!mounted) return;
       setState(() => _signInError = error.toString());
-    } on FirebaseSdkNotLinked catch (error) {
+    } catch (error) {
       if (!mounted) return;
       setState(() => _signInError = error.toString());
     } finally {
@@ -204,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (_signInError != null) ...[
               const SizedBox(height: 16),
               Text(
-                'Firebase is not configured yet.',
+                'Could not sign in.',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: look.ink,

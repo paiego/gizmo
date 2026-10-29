@@ -7,23 +7,11 @@ import 'package:gizmo/palette_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('sign-in reports missing Firebase config and does not mint an id',
-      () async {
-    expect(firebaseEnvironmentReady, isFalse);
-    expect(firebaseConfigGaps(), isNotEmpty);
-    expect(
-      firebaseConfigGaps().join('\n'),
-      isNot(contains('google-services.json')),
-    );
+  test('sign-in does not mint an id before Firebase is started', () async {
+    expect(firebaseIsReady(), isFalse);
     await expectLater(
       requestFirebaseUserId(),
-      throwsA(
-        isA<FirebaseConfigMissing>().having(
-          (error) => error.missing.join('\n'),
-          'missing',
-          contains('GoogleService-Info.plist'),
-        ),
-      ),
+      throwsA(isA<FirebaseNotStarted>()),
     );
   });
 
@@ -47,7 +35,7 @@ void main() {
 
     await expectLater(
       repository.signIn(loaded),
-      throwsA(isA<FirebaseConfigMissing>()),
+      throwsA(isA<FirebaseNotStarted>()),
     );
     final after = await repository.read();
     expect(after.firebaseId, isNull);

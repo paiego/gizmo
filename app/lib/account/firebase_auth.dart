@@ -1,62 +1,86 @@
-/// What is still required before Firebase Auth can issue an account id.
-///
-/// Nothing here is a credential. The project files and the SDK are absent,
-/// and compile-time `FIREBASE_*` values are empty unless a build injects them.
-class FirebaseConfigMissing implements Exception {
-  const FirebaseConfigMissing(this.missing);
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
-  final List<String> missing;
+import '../firebase_options.dart';
 
-  @override
-  String toString() => missing.join('\n');
-}
-
-/// The Firebase packages are not linked, so there is no Auth instance to call.
-class FirebaseSdkNotLinked implements Exception {
-  const FirebaseSdkNotLinked();
+/// The app process has not called [Firebase.initializeApp] yet.
+class FirebaseNotStarted implements Exception {
+  const FirebaseNotStarted();
 
   @override
-  String toString() =>
-      'firebase_core and firebase_auth are not dependencies yet.';
+  String toString() => 'Firebase has not been started.';
 }
 
-/// Files, packages, and build values a real Firebase Auth setup still needs.
-///
-/// iOS is the first platform. Android's google-services.json is not required
-/// yet. The iOS config is not in this repo, so it stays on the list.
-List<String> firebaseConfigGaps() {
-  final gaps = <String>[
-    'app/ios/Runner/GoogleService-Info.plist from the Firebase project',
-    'lib/firebase_options.dart generated for this iOS app',
-    'pubspec dependencies firebase_core and firebase_auth',
-  ];
-  if (!firebaseEnvironmentReady) {
-    gaps.add(
-      'FIREBASE_API_KEY, FIREBASE_APP_ID, FIREBASE_MESSAGING_SENDER_ID, and FIREBASE_PROJECT_ID supplied at build time',
-    );
+/// The person closed the Google account picker.
+class GoogleSignInCanceled implements Exception {
+  const GoogleSignInCanceled();
+
+  @override
+  String toString() => 'Sign-in was canceled.';
+}
+
+bool firebaseIsReady() {
+  try {
+    return Firebase.apps.isNotEmpty;
+  } catch (_) {
+    return false;
   }
-  return gaps;
 }
 
-bool get firebaseEnvironmentReady {
-  const apiKey = String.fromEnvironment('FIREBASE_API_KEY');
-  const appId = String.fromEnvironment('FIREBASE_APP_ID');
-  const sender = String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
-  const project = String.fromEnvironment('FIREBASE_PROJECT_ID');
-  return apiKey.isNotEmpty &&
-      appId.isNotEmpty &&
-      sender.isNotEmpty &&
-      project.isNotEmpty;
+var _googleReady = false;
+
+Future<GoogleSignIn> _google() async {
+  final google = GoogleSignIn.instance;
+  if (!_googleReady) {
+    final clientId = DefaultFirebaseOptions.currentPlatform.iosClientId;
+    if (clientId == null || clientId.isEmpty) {
+      throw StateError('The iOS Google client id is missing.');
+    }
+    await google.initialize(clientId: clientId);
+    _googleReady = true;
+  }
+  return google;
 }
 
-/// Sign-in call site for the iOS app.
+/// Signs in with Google and returns the Firebase Auth user id.
 ///
-/// When the SDK is linked this should sign in with Google and then read
-/// `credential.user.uid`. It does not create a stand-in id.
+/// Does not invent an id. A canceled picker or a missing Firebase app throws.
 Future<String> requestFirebaseUserId() async {
-  final gaps = firebaseConfigGaps();
-  if (gaps.isNotEmpty) {
-    throw FirebaseConfigMissing(gaps);
+  if (!firebaseIsReady()) {
+    throw const FirebaseNotStarted();
   }
-  throw const FirebaseSdkNotLinked();
+  final google = await _google();
+  final GoogleSignInAccount account;
+  try {
+    account = await google.authenticate();
+  } on GoogleSignInException catch (error) {
+    if (error.code == GoogleSignInExceptionCode.canceled) {
+      throw const GoogleSignInCanceled();
+    }
+    rethrow;
+  }
+  final idToken = account.authentication.idToken;
+  if (idToken == null || idToken.isEmpty) {
+    throw StateError('Google did not return an id token.');
+  }
+  final credential = GoogleAuthProvider.credential(idToken: idToken);
+  final signedIn = await FirebaseAuth.instance.signInWithCredential(credential);
+  final uid = signedIn.user?.uid;
+  if (uid == null || uid.isEmpty) {
+    throw StateError('Firebase did not return a user id.');
+  }
+  return uid;
+}
+
+/// Signs out of Firebase and Google. Local account data is cleared separately.
+Future<void> signOutFirebase() async {
+  try {
+    if (firebaseIsReady()) {
+      await FirebaseAuth.instance.signOut();
+    }
+  } catch (_) {}
+  try {
+    await GoogleSignIn.instance.signOut();
+  } catch (_) {}
 }

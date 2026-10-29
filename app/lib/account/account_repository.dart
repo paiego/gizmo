@@ -65,6 +65,7 @@ class AccountRepository {
   }
 
   Future<GizmoAccount> signOut(GizmoAccount current) async {
+    await signOutFirebase();
     final next = current.copyWith(clearFirebaseId: true);
     await save(next);
     return next;

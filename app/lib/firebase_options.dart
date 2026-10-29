@@ -58,7 +58,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '272689014623',
     projectId: 'gizmo-c15d6',
     storageBucket: 'gizmo-c15d6.firebasestorage.app',
-    iosClientId: '272689014623-gsc035vomuqd3pp58ei8j6ni5iubgqjd.apps.googleusercontent.com',
+    iosClientId:
+        '272689014623-gsc035vomuqd3pp58ei8j6ni5iubgqjd.apps.googleusercontent.com',
     iosBundleId: 'com.paiego.gizmo',
   );
 }
