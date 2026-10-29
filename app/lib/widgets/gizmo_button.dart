@@ -16,6 +16,7 @@ class GizmoButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final look = GizmoLook.of(context);
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
     );
@@ -24,7 +25,7 @@ class GizmoButton extends StatelessWidget {
       style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        color: filled ? paperColor : inkColor,
+        color: filled ? look.paper : look.ink,
       ),
     );
     return SizedBox(
@@ -34,9 +35,12 @@ class GizmoButton extends StatelessWidget {
           ? FilledButton(
               onPressed: onPressed,
               style: FilledButton.styleFrom(
-                backgroundColor: inkColor,
-                foregroundColor: paperColor,
-                disabledBackgroundColor: const Color(0xFFBDBDBD),
+                backgroundColor: look.ink,
+                foregroundColor: look.paper,
+                disabledBackgroundColor: Color.alphaBlend(
+                  look.ink.withValues(alpha: 0.35),
+                  look.board,
+                ),
                 shape: shape,
               ),
               child: text,
@@ -44,8 +48,8 @@ class GizmoButton extends StatelessWidget {
           : OutlinedButton(
               onPressed: onPressed,
               style: OutlinedButton.styleFrom(
-                foregroundColor: inkColor,
-                side: const BorderSide(color: inkColor, width: 1.5),
+                foregroundColor: look.ink,
+                side: BorderSide(color: look.ink, width: 1.5),
                 shape: shape,
               ),
               child: text,

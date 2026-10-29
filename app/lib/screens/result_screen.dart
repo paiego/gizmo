@@ -13,11 +13,13 @@ class ResultScreen extends StatefulWidget {
     required this.playerName,
     required this.transcript,
     this.client,
+    this.adminMode = false,
   });
 
   final String playerName;
   final SubmittedRun transcript;
   final GizmoClient? client;
+  final bool adminMode;
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
@@ -63,47 +65,50 @@ class _ResultScreenState extends State<ResultScreen> {
   @override
   Widget build(BuildContext context) {
     final saved = _saved;
+    final look = GizmoLook.of(context);
     return PopScope(
       canPop: _settled,
       child: Scaffold(
-        backgroundColor: boardColor,
+        backgroundColor: look.board,
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Score',
-                  style: TextStyle(fontSize: 16, color: mutedColor),
+                  style: TextStyle(fontSize: 16, color: look.muted),
                 ),
                 Text(
                   '${widget.transcript.score}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 72,
                     height: 1,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -1.5,
+                    color: look.ink,
                   ),
                 ),
                 const SizedBox(height: 16),
                 if (!_settled)
-                  const Text('Saving…', style: TextStyle(color: mutedColor))
+                  Text('Saving…', style: TextStyle(color: look.muted))
                 else if (_error != null)
-                  Text(_error!, style: const TextStyle(color: mutedColor))
+                  Text(_error!, style: TextStyle(color: look.muted))
                 else if (saved != null) ...[
                   if (saved.isNewPersonalBest)
-                    const Text(
+                    Text(
                       'New personal best',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
+                        color: look.ink,
                       ),
                     ),
                   if (saved.isNewPersonalBest) const SizedBox(height: 6),
                   Text(
                     'Rank ${saved.rank}',
-                    style: const TextStyle(fontSize: 18, color: mutedColor),
+                    style: TextStyle(fontSize: 18, color: look.muted),
                   ),
                 ],
                 const Spacer(),
@@ -114,8 +119,10 @@ class _ResultScreenState extends State<ResultScreen> {
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  PlayScreen(playerName: widget.playerName),
+                              builder: (context) => PlayScreen(
+                                playerName: widget.playerName,
+                                adminMode: widget.adminMode,
+                              ),
                             ),
                           );
                         }
