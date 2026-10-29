@@ -22,12 +22,12 @@ class FirebaseSdkNotLinked implements Exception {
 
 /// Files, packages, and build values a real Firebase Auth setup still needs.
 ///
-/// The native config files are not in this repo, so they stay on the list.
+/// iOS is the first platform. Android's google-services.json is not required
+/// yet. The iOS config is not in this repo, so it stays on the list.
 List<String> firebaseConfigGaps() {
   final gaps = <String>[
-    'app/android/app/google-services.json from the Firebase project',
     'app/ios/Runner/GoogleService-Info.plist from the Firebase project',
-    'lib/firebase_options.dart generated for this app',
+    'lib/firebase_options.dart generated for this iOS app',
     'pubspec dependencies firebase_core and firebase_auth',
   ];
   if (!firebaseEnvironmentReady) {
@@ -49,11 +49,10 @@ bool get firebaseEnvironmentReady {
       project.isNotEmpty;
 }
 
-/// Sign-in call site.
+/// Sign-in call site for the iOS app.
 ///
-/// When the SDK is linked this should be:
-/// `FirebaseAuth.instance.signInAnonymously()` and then `credential.user.uid`.
-/// It does not create a stand-in id.
+/// When the SDK is linked this should sign in with Google and then read
+/// `credential.user.uid`. It does not create a stand-in id.
 Future<String> requestFirebaseUserId() async {
   final gaps = firebaseConfigGaps();
   if (gaps.isNotEmpty) {

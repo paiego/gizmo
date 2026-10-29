@@ -12,8 +12,8 @@ void main() {
     expect(firebaseEnvironmentReady, isFalse);
     expect(firebaseConfigGaps(), isNotEmpty);
     expect(
-      firebaseConfigGaps(),
-      contains(contains('google-services.json')),
+      firebaseConfigGaps().join('\n'),
+      isNot(contains('google-services.json')),
     );
     await expectLater(
       requestFirebaseUserId(),

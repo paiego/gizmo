@@ -314,7 +314,7 @@ void main() {
 
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('google-services.json'), findsOneWidget);
+    expect(find.textContaining('google-services.json'), findsNothing);
     expect(find.textContaining('GoogleService-Info.plist'), findsOneWidget);
     expect(find.text('No Firebase id yet'), findsOneWidget);
   });
