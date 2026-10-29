@@ -76,6 +76,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } on GoogleSignInCanceled catch (error) {
       if (!mounted) return;
       setState(() => _signInError = error.toString());
+    } on SignInOffline catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _signInError = _account.signedIn
+            ? 'Still offline. You can play as the account already on this device.'
+            : error.toString();
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() => _signInError = error.toString());
