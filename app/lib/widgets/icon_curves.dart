@@ -16,13 +16,9 @@ const double iconRadius = 32;
 /// Center of [iconRadius] in the 100-unit box.
 const Offset iconCenter = Offset(50, 50);
 
-/// How far a stroke of [thickness] may place its centerline.
-double curveReach(double thickness) => iconRadius - thickness / 2;
-
 /// One connected curve.
 ///
-/// For `t` in `[0, 1]`, with [reach] the greatest distance from [iconCenter]
-/// the centerline may use:
+/// For `t` in `[0, 1]`, with [reach] the curve's own radius:
 ///
 /// ```text
 /// angle(t)  = centerAngle + (t - 1/2) * span
@@ -35,7 +31,7 @@ double curveReach(double thickness) => iconRadius - thickness / 2;
 /// ```
 ///
 /// `|radialBase| + |radialA| + |radialB| ≤ 0.75` and `|crossAmplitude| ≤ 0.20`,
-/// so the centerline stays inside `0.95 * reach`.
+/// so every point stays inside `0.95 * reach`.
 class CurveFormula {
   const CurveFormula({
     required this.centerAngle,
@@ -84,23 +80,6 @@ class CurveFormula {
     );
   }
 
-  CurveFormula scaled(double factor) {
-    return CurveFormula(
-      centerAngle: centerAngle,
-      span: span,
-      radialBase: radialBase * factor,
-      radialA: radialA * factor,
-      frequencyA: frequencyA,
-      phaseA: phaseA,
-      radialB: radialB * factor,
-      frequencyB: frequencyB,
-      phaseB: phaseB,
-      crossAmplitude: crossAmplitude * factor,
-      crossFrequency: crossFrequency,
-      crossPhase: crossPhase,
-    );
-  }
-
   @override
   bool operator ==(Object other) =>
       other is CurveFormula &&
@@ -138,15 +117,21 @@ enum IconCurveRole { body, top, side, hole, core, rim }
 
 /// One stroke in an icon.
 ///
-/// [thickness] is this curve's line thickness, in icon units.
-/// [formula] is its own connected curve.
-/// [color] is its own catalog color, looked up in the active palette.
+/// Each curve owns its own [thickness], [color], [radius], [formula],
+/// [cap], [join], and [dash]. [radius] is the centerline circle: every
+/// point of the formula lies inside it, and [measuredRadius] reads that
+/// size back off the points. The stroked result, including cap and join,
+/// still fits in [iconRadius].
 class IconCurve {
   const IconCurve({
     required this.role,
     required this.formula,
     required this.thickness,
     required this.color,
+    required this.radius,
+    required this.cap,
+    required this.join,
+    required this.dash,
   });
 
   final IconCurveRole role;
@@ -154,48 +139,80 @@ class IconCurve {
   final double thickness;
   final ColorId color;
 
+  /// This curve's own centerline radius, in icon units.
+  final double radius;
+
+  final StrokeCap cap;
+  final StrokeJoin join;
+
+  /// On/off lengths in icon units. Empty means a solid stroke.
+  final List<double> dash;
+
   @override
   bool operator ==(Object other) =>
       other is IconCurve &&
       other.role == role &&
       other.formula == formula &&
       other.thickness == thickness &&
-      other.color == color;
+      other.color == color &&
+      other.radius == radius &&
+      other.cap == cap &&
+      other.join == join &&
+      _sameDash(other.dash, dash);
 
   @override
-  int get hashCode => Object.hash(role, formula, thickness, color);
+  int get hashCode => Object.hash(
+        role,
+        formula,
+        thickness,
+        color,
+        radius,
+        cap,
+        join,
+        Object.hashAll(dash),
+      );
+}
+
+/// How far past the centerline [cap] and [join] can push the ink.
+///
+/// The extra unit covers a square cap's corner and a miter clipped at 1.5.
+double strokeInset(double thickness, StrokeCap cap, StrokeJoin join) {
+  final capFactor = switch (cap) {
+    StrokeCap.butt || StrokeCap.round => 1.0,
+    StrokeCap.square => math.sqrt2,
+  };
+  final joinFactor = switch (join) {
+    StrokeJoin.miter => 1.5,
+    StrokeJoin.round || StrokeJoin.bevel => 1.0,
+  };
+  return thickness / 2 * math.max(capFactor, joinFactor) + 1;
+}
+
+/// Greatest distance from [iconCenter] to a point on [curve].
+double measuredRadius(IconCurve curve, {int steps = 64}) {
+  var farthest = 0.0;
+  for (var i = 0; i <= steps; i++) {
+    final point = curve.formula.at(i / steps, reach: curve.radius);
+    final distance = (point - iconCenter).distance;
+    if (distance > farthest) farthest = distance;
+  }
+  return farthest;
 }
 
 /// The curves that paint [assembly]. Parts are separate strokes, not one fill.
 List<IconCurve> iconCurves(Assembly assembly) {
   return [
-    _curve(assembly, IconCurveRole.body, 0, 6.2, 0.6),
+    _curve(assembly, IconCurveRole.body, 0, 4.4, 0.4),
     if (assembly.top != TopId.none)
-      _curve(assembly, IconCurveRole.top, 2, 3.4, 0.4),
+      _curve(assembly, IconCurveRole.top, 2, 2.4, 0.3),
     if (assembly.side != SideId.none)
-      _curve(assembly, IconCurveRole.side, 4, 4.6, 0.4),
+      _curve(assembly, IconCurveRole.side, 4, 3.1, 0.3),
     if (assembly.hole != HoleId.none)
-      _curve(
-        assembly,
-        IconCurveRole.hole,
-        5,
-        2.6,
-        0.3,
-        closed: true,
-        scale: 0.6,
-      ),
+      _curve(assembly, IconCurveRole.hole, 5, 1.8, 0.3, closed: true),
     if (assembly.pulse == PulseId.core)
-      _curve(
-        assembly,
-        IconCurveRole.core,
-        1,
-        5.0,
-        0.3,
-        closed: true,
-        scale: 0.7,
-      ),
+      _curve(assembly, IconCurveRole.core, 1, 3.7, 0.3, closed: true),
     if (assembly.pulse == PulseId.rim)
-      _curve(assembly, IconCurveRole.rim, 3, 7.5, 0.4, closed: true),
+      _curve(assembly, IconCurveRole.rim, 3, 5.2, 0.4, closed: true),
   ];
 }
 
@@ -221,10 +238,41 @@ Path formulaPath(CurveFormula formula,
   return path;
 }
 
+/// The formula, broken into this curve's dash. A solid curve is unchanged.
+Path curvePath(IconCurve curve) {
+  return dashPath(
+    formulaPath(curve.formula, reach: curve.radius),
+    curve.dash,
+  );
+}
+
+Path dashPath(Path source, List<double> pattern) {
+  if (pattern.isEmpty) return source;
+  final dashed = Path();
+  for (final metric in source.computeMetrics()) {
+    var distance = 0.0;
+    var draw = true;
+    var index = 0;
+    while (distance < metric.length) {
+      final length = pattern[index % pattern.length];
+      final next = math.min(distance + length, metric.length);
+      if (draw && next > distance) {
+        dashed.addPath(metric.extractPath(distance, next), Offset.zero);
+      }
+      distance = next;
+      draw = !draw;
+      index += 1;
+      if (length <= 0) break;
+    }
+  }
+  return dashed;
+}
+
 /// True when [a] and [b] would paint as the same icon.
 ///
 /// Equal assemblies match. A different color or pulse does not. Otherwise
-/// the curves' thicknesses, colors, and formulas are compared.
+/// each curve's thickness, color, radius, formula, cap, join, and dash
+/// are compared.
 bool samePicture(Assembly a, Assembly b) {
   if (a == b) return true;
   if (a.color != b.color || a.pulse != b.pulse) return false;
@@ -233,6 +281,14 @@ bool samePicture(Assembly a, Assembly b) {
   if (left.length != right.length) return false;
   for (var i = 0; i < left.length; i++) {
     if (left[i] != right[i]) return false;
+  }
+  return true;
+}
+
+bool _sameDash(List<double> a, List<double> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
   }
   return true;
 }
@@ -257,17 +313,61 @@ IconCurve _curve(
   double thicknessBase,
   double thicknessJitter, {
   bool closed = false,
-  double scale = 1,
 }) {
   final random = math.Random(_seed(assembly, role));
   final thickness =
       thicknessBase + (random.nextDouble() - 0.5) * thicknessJitter;
+  final cap = StrokeCap.values[random.nextInt(StrokeCap.values.length)];
+  final join = StrokeJoin.values[random.nextInt(StrokeJoin.values.length)];
+  final dash = _dash(random);
+  final formula = _formula(random, closed: closed);
+  final limit = iconRadius -
+      strokeInset(
+        role == IconCurveRole.rim ? 10 : thickness,
+        cap,
+        join,
+      );
   return IconCurve(
     role: role,
-    formula: _formula(random, closed: closed).scaled(scale),
+    formula: formula,
     thickness: thickness,
     color: _shift(assembly.color, colorShift),
+    radius: _radius(random, role, limit),
+    cap: cap,
+    join: join,
+    dash: dash,
   );
+}
+
+double _radius(math.Random random, IconCurveRole role, double limit) {
+  final (lo, hi) = switch (role) {
+    IconCurveRole.hole => (12.0, 13.8),
+    IconCurveRole.core => (16.0, 17.8),
+    IconCurveRole.rim => (20.0, 21.8),
+    IconCurveRole.top => (23.4, 24.2),
+    IconCurveRole.side => (24.5, 25.3),
+    IconCurveRole.body => (25.6, 26.6),
+  };
+  final high = math.min(hi, limit - 0.05);
+  final low = math.min(lo, high);
+  if (high <= low) return low;
+  return low + random.nextDouble() * (high - low);
+}
+
+List<double> _dash(math.Random random) {
+  switch (random.nextInt(3)) {
+    case 0:
+      return const [];
+    case 1:
+      return [5 + random.nextDouble() * 4, 2.5 + random.nextDouble() * 2];
+    default:
+      return [
+        3 + random.nextDouble() * 2,
+        2 + random.nextDouble(),
+        1.2,
+        2 + random.nextDouble(),
+      ];
+  }
 }
 
 CurveFormula _formula(math.Random random, {required bool closed}) {
@@ -275,10 +375,10 @@ CurveFormula _formula(math.Random random, {required bool closed}) {
   final radialB = (random.nextDouble() * 0.05) * (random.nextBool() ? 1 : -1);
   final room = 0.75 - radialA.abs() - radialB.abs();
   final radialBase = 0.58 + random.nextDouble() * (room - 0.58);
-  final crossAmplitude = 0.04 + random.nextDouble() * 0.08;
+  final crossAmplitude = 0.03 + random.nextDouble() * 0.05;
   return CurveFormula(
     centerAngle: random.nextDouble() * 2 * math.pi,
-    span: closed ? 2 * math.pi : 2.6 + random.nextDouble() * 0.8,
+    span: closed ? 2 * math.pi : math.pi,
     radialBase: radialBase,
     radialA: radialA,
     frequencyA: 1 + random.nextInt(3).toDouble(),

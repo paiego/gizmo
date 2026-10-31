@@ -64,8 +64,43 @@ void main() {
                 curves.length,
                 reason: '$assembly shares a formula',
               );
+              final radii = curves.map((curve) => curve.radius).toSet();
+              expect(
+                radii.length,
+                curves.length,
+                reason: '$assembly shares a radius',
+              );
               for (final curve in curves) {
                 expect(curve.formula.bounded, isTrue, reason: '$assembly');
+                expect(curve.radius, greaterThan(0), reason: '$assembly');
+                for (final length in curve.dash) {
+                  expect(length, greaterThan(0), reason: '$assembly');
+                }
+                final measured = measuredRadius(curve);
+                expect(
+                  measured,
+                  lessThanOrEqualTo(curve.radius + 1e-6),
+                  reason: '$assembly ${curve.role}',
+                );
+                expect(
+                  measured,
+                  greaterThanOrEqualTo(curve.radius * 0.5),
+                  reason: '$assembly ${curve.role} radius is unused',
+                );
+                final samples = [
+                  for (var i = 0; i <= 48; i++)
+                    curve.formula.at(i / 48, reach: curve.radius),
+                ];
+                var widest = 0.0;
+                for (var i = 1; i < samples.length; i++) {
+                  final step = (samples[i] - samples[i - 1]).distance;
+                  if (step > widest) widest = step;
+                }
+                expect(
+                  widest,
+                  lessThan(iconRadius),
+                  reason: '$assembly ${curve.role} jumps',
+                );
                 final painted = [
                   curve.thickness,
                   if (curve.role == IconCurveRole.rim) ...[
@@ -74,29 +109,10 @@ void main() {
                   ],
                 ];
                 for (final thickness in painted) {
-                  final reach = curveReach(thickness);
-                  final samples = [
-                    for (var i = 0; i <= 48; i++)
-                      curve.formula.at(i / 48, reach: reach),
-                  ];
-                  for (final point in samples) {
-                    final extent =
-                        (point - iconCenter).distance + thickness / 2;
-                    expect(
-                      extent,
-                      lessThanOrEqualTo(iconRadius + 1e-6),
-                      reason: '$assembly ${curve.role} $point',
-                    );
-                  }
-                  var widest = 0.0;
-                  for (var i = 1; i < samples.length; i++) {
-                    final step = (samples[i] - samples[i - 1]).distance;
-                    if (step > widest) widest = step;
-                  }
                   expect(
-                    widest,
-                    lessThan(iconRadius),
-                    reason: '$assembly ${curve.role} jumps',
+                    measured + strokeInset(thickness, curve.cap, curve.join),
+                    lessThanOrEqualTo(iconRadius + 1e-6),
+                    reason: '$assembly ${curve.role} $thickness',
                   );
                 }
               }
@@ -187,17 +203,13 @@ void main() {
         expect(core.formula, isNot(opening.formula));
         expect(core.thickness, isNot(opening.thickness));
         expect(core.color, isNot(opening.color));
-        for (var i = 0; i <= 24; i++) {
-          final point = core.formula.at(
-            i / 24,
-            reach: curveReach(core.thickness),
-          );
-          expect(
-            (point - iconCenter).distance + core.thickness / 2,
-            lessThanOrEqualTo(iconRadius + 1e-6),
-            reason: '$body $hole',
-          );
-        }
+        expect(core.radius, isNot(opening.radius));
+        expect(
+          measuredRadius(core) +
+              strokeInset(core.thickness, core.cap, core.join),
+          lessThanOrEqualTo(iconRadius + 1e-6),
+          reason: '$body $hole',
+        );
       }
     }
   });
@@ -323,7 +335,7 @@ IconPainter _painter(WidgetTester tester, int index) {
 double mathMax(double a, double b) => a > b ? a : b;
 
 Rect _bounds(IconCurve curve) {
-  final reach = curveReach(curve.thickness);
+  final reach = curve.radius;
   var minX = double.infinity;
   var minY = double.infinity;
   var maxX = -double.infinity;

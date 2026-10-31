@@ -157,16 +157,13 @@ class IconPainter extends CustomPainter {
         curve,
         rimThickness: outline.units,
       );
-      final path = formulaPath(
-        curve.formula,
-        reach: curveReach(thickness),
-      ).transform(matrix);
+      final path = curvePath(curve).transform(matrix);
       final ink = _ink(curve);
       canvas.drawPath(
         path.shift(const Offset(2, 4)),
-        _stroke(thickness * scale, const Color(0x33000000), blur: true),
+        _stroke(curve, thickness * scale, const Color(0x33000000), blur: true),
       );
-      canvas.drawPath(path, _stroke(thickness * scale, ink));
+      canvas.drawPath(path, _stroke(curve, thickness * scale, ink));
     }
   }
 
@@ -179,12 +176,14 @@ class IconPainter extends CustomPainter {
     return _pulseInk(base, phase);
   }
 
-  Paint _stroke(double width, Color color, {bool blur = false}) {
+  Paint _stroke(IconCurve curve, double width, Color color,
+      {bool blur = false}) {
     return Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = width
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = curve.cap
+      ..strokeJoin = curve.join
+      ..strokeMiterLimit = 1.5
       ..color = color
       ..isAntiAlias = true
       ..maskFilter = blur ? const MaskFilter.blur(BlurStyle.normal, 6) : null;
