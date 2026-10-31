@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 
 import '../palette_scope.dart';
-import 'icon_paths.dart';
+import 'icon_curves.dart';
 
-/// Paints one assembly. [size] is the cell; the ink occupies its center 72%.
+/// Paints one assembly as separate curves inside [iconRadius].
 ///
 /// [palette] wins when set. Otherwise the surrounding [PaletteScope] is used,
 /// and a missing scope paints [warmPalette].
@@ -152,72 +152,42 @@ class IconPainter extends CustomPainter {
     paintCount += 1;
     final scale = size.shortestSide / 100;
     final matrix = _scaleMatrix(scale);
-    final silhouette = iconSilhouette(assembly).transform(matrix);
-    canvas.drawPath(
-      silhouette.shift(const Offset(2, 4)),
-      Paint()
-        ..color = const Color(0x33000000)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6)
-        ..isAntiAlias = true,
-    );
-    final base = Color(palette.values[assembly.color]!);
-    canvas.saveLayer(Offset.zero & size, Paint());
-    canvas.drawPath(
-      silhouette,
-      Paint()
-        ..color = base
-        ..isAntiAlias = true,
-    );
-    _paintPulse(canvas, silhouette, matrix, scale, base);
-    // Clear the hole after the pulse so the flash cannot fill it.
-    final hole = holeGlyph(assembly.hole);
-    if (hole != null) {
-      canvas.drawPath(
-        hole.transform(matrix),
-        Paint()
-          ..blendMode = BlendMode.clear
-          ..isAntiAlias = true,
+    for (final curve in iconCurves(assembly)) {
+      final thickness = paintedThickness(
+        curve,
+        rimThickness: outline.units,
       );
+      final path = formulaPath(
+        curve.formula,
+        reach: curveReach(thickness),
+      ).transform(matrix);
+      final ink = _ink(curve);
+      canvas.drawPath(
+        path.shift(const Offset(2, 4)),
+        _stroke(thickness * scale, const Color(0x33000000), blur: true),
+      );
+      canvas.drawPath(path, _stroke(thickness * scale, ink));
     }
-    canvas.restore();
   }
 
-  void _paintPulse(
-    Canvas canvas,
-    Path silhouette,
-    Float64List matrix,
-    double scale,
-    Color base,
-  ) {
-    switch (assembly.pulse) {
-      case PulseId.none:
-        return;
-      case PulseId.core:
-      case PulseId.rim:
-        break;
-    }
-    final ink = _pulseInk(base, phase);
-    canvas.save();
-    canvas.clipPath(silhouette);
-    if (assembly.pulse == PulseId.core) {
-      canvas.drawPath(
-        coreGlyph(assembly.body).transform(matrix),
-        Paint()
-          ..color = ink
-          ..isAntiAlias = true,
-      );
-    } else {
-      canvas.drawPath(
-        iconOutline(assembly).transform(matrix),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = outline.units * scale
-          ..strokeJoin = StrokeJoin.round
-          ..color = ink
-          ..isAntiAlias = true,
-      );
-    }
-    canvas.restore();
+  Color _ink(IconCurve curve) {
+    final base = Color(palette.values[curve.color]!);
+    final pulsing =
+        (assembly.pulse == PulseId.core && curve.role == IconCurveRole.core) ||
+            (assembly.pulse == PulseId.rim && curve.role == IconCurveRole.rim);
+    if (!pulsing) return base;
+    return _pulseInk(base, phase);
+  }
+
+  Paint _stroke(double width, Color color, {bool blur = false}) {
+    return Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = width
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = color
+      ..isAntiAlias = true
+      ..maskFilter = blur ? const MaskFilter.blur(BlurStyle.normal, 6) : null;
   }
 
   @override

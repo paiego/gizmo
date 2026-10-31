@@ -1,68 +1,105 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gizmo/widgets/icon_paths.dart';
+import 'package:gizmo/widgets/icon_curves.dart';
 import 'package:gizmo/widgets/icon_view.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('ink stays inside the centered 72 box and parts join', () {
+  test('the formula is the curve', () {
+    const formula = CurveFormula(
+      centerAngle: 0,
+      span: 0,
+      radialBase: 0.5,
+      radialA: 0,
+      radialB: 0,
+      frequencyA: 1,
+      phaseA: 0,
+      frequencyB: 1,
+      phaseB: 0,
+      crossAmplitude: 0,
+      crossFrequency: 1,
+      crossPhase: 0,
+    );
+    final point = formula.at(0.5, reach: 20);
+    expect(point.dx, closeTo(60, 1e-9));
+    expect(point.dy, closeTo(50, 1e-9));
+  });
+
+  test('each curve owns a thickness and a connected formula inside the radius',
+      () {
+    expect(iconRadius, 32);
     for (final body in BodyId.values) {
       for (final top in TopId.values) {
         for (final side in SideId.values) {
           if (top == TopId.none && side == SideId.none) continue;
           for (final hole in HoleId.values) {
-            final assembly = Assembly(
-              body: body,
-              top: top,
-              side: side,
-              hole: hole,
-              color: ColorId.red,
-              pulse: PulseId.none,
-            );
-            final path = iconSilhouette(assembly);
-            final bounds = path.getBounds();
-            expect(
-              bounds.left,
-              greaterThanOrEqualTo(13.5),
-              reason: '$assembly $bounds',
-            );
-            expect(
-              bounds.top,
-              greaterThanOrEqualTo(13.5),
-              reason: '$assembly $bounds',
-            );
-            expect(
-              bounds.right,
-              lessThanOrEqualTo(86.5),
-              reason: '$assembly $bounds',
-            );
-            expect(
-              bounds.bottom,
-              lessThanOrEqualTo(86.5),
-              reason: '$assembly $bounds',
-            );
-            expect(
-              path.contains(const Offset(50, 50)) || hole != HoleId.none,
-              isTrue,
-            );
-
-            final contours = path.computeMetrics().length;
-            final loop = top == TopId.loop;
-            final handle = side == SideId.handle;
-            final cut = hole != HoleId.none;
-            if (!loop && !handle && !cut) {
-              expect(contours, 1, reason: '$assembly split into $contours');
-            } else if (loop && cut && !handle) {
-              expect(contours, greaterThanOrEqualTo(2), reason: '$assembly');
-            }
-            if (hole == HoleId.round || hole == HoleId.slot) {
-              expect(
-                path.contains(const Offset(50, 50)),
-                isFalse,
-                reason: '$assembly hole is filled',
+            for (final pulse in PulseId.values) {
+              final assembly = Assembly(
+                body: body,
+                top: top,
+                side: side,
+                hole: hole,
+                color: ColorId.red,
+                pulse: pulse,
               );
+              final curves = iconCurves(assembly);
+              expect(curves, isNotEmpty, reason: '$assembly');
+              expect(
+                curves.map((curve) => curve.role).toSet().length,
+                curves.length,
+                reason: '$assembly shares a role',
+              );
+              final thicknesses =
+                  curves.map((curve) => curve.thickness).toSet();
+              expect(
+                thicknesses.length,
+                curves.length,
+                reason: '$assembly shares a thickness',
+              );
+              final formulas = curves.map((curve) => curve.formula).toSet();
+              expect(
+                formulas.length,
+                curves.length,
+                reason: '$assembly shares a formula',
+              );
+              for (final curve in curves) {
+                expect(curve.formula.bounded, isTrue, reason: '$assembly');
+                final painted = [
+                  curve.thickness,
+                  if (curve.role == IconCurveRole.rim) ...[
+                    OutlineWeight.thin.units,
+                    OutlineWeight.thick.units,
+                  ],
+                ];
+                for (final thickness in painted) {
+                  final reach = curveReach(thickness);
+                  final samples = [
+                    for (var i = 0; i <= 48; i++)
+                      curve.formula.at(i / 48, reach: reach),
+                  ];
+                  for (final point in samples) {
+                    final extent =
+                        (point - iconCenter).distance + thickness / 2;
+                    expect(
+                      extent,
+                      lessThanOrEqualTo(iconRadius + 1e-6),
+                      reason: '$assembly ${curve.role} $point',
+                    );
+                  }
+                  var widest = 0.0;
+                  for (var i = 1; i < samples.length; i++) {
+                    final step = (samples[i] - samples[i - 1]).distance;
+                    if (step > widest) widest = step;
+                  }
+                  expect(
+                    widest,
+                    lessThan(iconRadius),
+                    reason: '$assembly ${curve.role} jumps',
+                  );
+                }
+              }
             }
           }
         }
@@ -70,50 +107,31 @@ void main() {
     }
   });
 
-  test('attached parts are at least 14 units on one side', () {
+  test('each part curve spans at least 14 units', () {
     for (final body in BodyId.values) {
       for (final top in TopId.values) {
-        if (top == TopId.none) continue;
-        final glyph = topGlyph(body, top)!;
-        final bounds = glyph.outline.getBounds();
-        expect(
-          mathMax(bounds.width, bounds.height),
-          greaterThanOrEqualTo(14),
-          reason: '$body $top $bounds',
-        );
+        for (final side in SideId.values) {
+          if (top == TopId.none && side == SideId.none) continue;
+          final curves = iconCurves(
+            Assembly(
+              body: body,
+              top: top,
+              side: side,
+              hole: HoleId.none,
+              color: ColorId.red,
+              pulse: PulseId.none,
+            ),
+          );
+          for (final curve in curves) {
+            final bounds = _bounds(curve);
+            expect(
+              mathMax(bounds.width, bounds.height),
+              greaterThanOrEqualTo(14),
+              reason: '$body $top $side ${curve.role} $bounds',
+            );
+          }
+        }
       }
-      for (final side in SideId.values) {
-        if (side == SideId.none) continue;
-        final bounds = sideGlyph(body, side)!.getBounds();
-        expect(
-          mathMax(bounds.width, bounds.height),
-          greaterThanOrEqualTo(14),
-          reason: '$body $side $bounds',
-        );
-      }
-    }
-  });
-
-  test('a part stays attached to the body', () {
-    const samples = [
-      (BodyId.disc, TopId.knob, SideId.none),
-      (BodyId.slab, TopId.horn, SideId.tab),
-      (BodyId.wedge, TopId.none, SideId.wing),
-      (BodyId.arch, TopId.knob, SideId.tab),
-    ];
-    for (final sample in samples) {
-      final path = iconSilhouette(
-        Assembly(
-          body: sample.$1,
-          top: sample.$2,
-          side: sample.$3,
-          hole: HoleId.none,
-          color: ColorId.blue,
-          pulse: PulseId.none,
-        ),
-      );
-      expect(path.contains(const Offset(50, 58)), isTrue, reason: '$sample');
-      expect(path.computeMetrics().length, 1, reason: '$sample');
     }
   });
 
@@ -149,29 +167,37 @@ void main() {
     );
   });
 
-  test('the core stays inside the ink and leaves the hole visible', () {
+  test('the core and the hole are different curves inside the radius', () {
     for (final body in BodyId.values) {
-      final core = coreGlyph(body);
-      final bounds = core.getBounds();
-      expect(bounds.left, greaterThanOrEqualTo(14), reason: '$body');
-      expect(bounds.top, greaterThanOrEqualTo(14), reason: '$body');
-      expect(bounds.right, lessThanOrEqualTo(86), reason: '$body');
-      expect(bounds.bottom, lessThanOrEqualTo(86), reason: '$body');
-      final ink = bodyPath(body);
       for (final hole in [HoleId.round, HoleId.slot]) {
-        final cut = holeGlyph(hole)!;
-        var visible = false;
-        var escaped = false;
-        for (var y = 14; y <= 86; y += 2) {
-          for (var x = 14; x <= 86; x += 2) {
-            final point = Offset(x.toDouble(), y.toDouble());
-            if (!core.contains(point)) continue;
-            if (!ink.contains(point)) escaped = true;
-            if (!cut.contains(point)) visible = true;
-          }
+        final curves = iconCurves(
+          Assembly(
+            body: body,
+            top: TopId.knob,
+            side: SideId.tab,
+            hole: hole,
+            color: ColorId.blue,
+            pulse: PulseId.core,
+          ),
+        );
+        final core =
+            curves.singleWhere((curve) => curve.role == IconCurveRole.core);
+        final opening =
+            curves.singleWhere((curve) => curve.role == IconCurveRole.hole);
+        expect(core.formula, isNot(opening.formula));
+        expect(core.thickness, isNot(opening.thickness));
+        expect(core.color, isNot(opening.color));
+        for (var i = 0; i <= 24; i++) {
+          final point = core.formula.at(
+            i / 24,
+            reach: curveReach(core.thickness),
+          );
+          expect(
+            (point - iconCenter).distance + core.thickness / 2,
+            lessThanOrEqualTo(iconRadius + 1e-6),
+            reason: '$body $hole',
+          );
         }
-        expect(escaped, isFalse, reason: '$body core leaves the body');
-        expect(visible, isTrue, reason: '$body $hole core covers the hole');
       }
     }
   });
@@ -295,3 +321,19 @@ IconPainter _painter(WidgetTester tester, int index) {
 }
 
 double mathMax(double a, double b) => a > b ? a : b;
+
+Rect _bounds(IconCurve curve) {
+  final reach = curveReach(curve.thickness);
+  var minX = double.infinity;
+  var minY = double.infinity;
+  var maxX = -double.infinity;
+  var maxY = -double.infinity;
+  for (var i = 0; i <= 48; i++) {
+    final point = curve.formula.at(i / 48, reach: reach);
+    if (point.dx < minX) minX = point.dx;
+    if (point.dy < minY) minY = point.dy;
+    if (point.dx > maxX) maxX = point.dx;
+    if (point.dy > maxY) maxY = point.dy;
+  }
+  return Rect.fromLTRB(minX, minY, maxX, maxY);
+}

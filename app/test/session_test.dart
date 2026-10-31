@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gizmo/game/session.dart';
-import 'package:gizmo/widgets/icon_paths.dart';
+import 'package:gizmo/widgets/icon_curves.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 
 void main() {
