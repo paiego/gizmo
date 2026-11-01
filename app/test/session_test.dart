@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gizmo/game/session.dart';
-import 'package:gizmo/widgets/icon_curves.dart';
+import 'package:gizmo/widgets/icon_shapes.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 
 void main() {
@@ -11,7 +11,7 @@ void main() {
     var finished = false;
     for (var turn = 0; turn < 3; turn++) {
       final round = session.deal();
-      expect(round.choiceCount, choiceCountForScore(session.score));
+      expect(round.choiceCount, choiceCountForLevel(session.level));
       finished = session.answer(round: round, correct: false);
     }
     expect(finished, isTrue);
@@ -47,26 +47,54 @@ void main() {
     }
   });
 
-  test('admin mode keeps going after misses and the score still climbs', () {
+  test('a miss steps the level up and leaves the score', () {
+    final session = GameSession(random: Random(1));
+    final first = session.deal();
+    expect(session.level, 1);
+    expect(first.choiceCount, 3);
+    session.answer(round: first, correct: false);
+    expect(session.score, 0);
+    expect(session.level, 2);
+    expect(session.deal().choiceCount, 3);
+  });
+
+  test('a queued level is the next round', () {
+    final session = GameSession(random: Random(2), adminMode: true);
+    final first = session.deal();
+    session.queueLevel(12);
+    session.answer(round: first, correct: true);
+    expect(session.score, 1);
+    expect(session.level, 12);
+    final next = session.deal();
+    expect(next.choiceCount, choiceCountForLevel(12));
+    session.answer(round: next, correct: false);
+    expect(session.score, 1);
+    expect(session.level, 13);
+  });
+
+  test('admin mode keeps going after misses and the level still climbs', () {
     final session = GameSession(random: Random(9), adminMode: true);
     var finished = false;
     for (var turn = 0; turn < 3; turn++) {
       final round = session.deal();
+      expect(round.choiceCount, choiceCountForLevel(session.level));
       finished = session.answer(round: round, correct: false);
     }
     expect(finished, isFalse);
     expect(session.chances, 3);
     expect(session.score, 0);
+    expect(session.level, 4);
 
     for (var turn = 0; turn < 7; turn++) {
       final round = session.deal();
-      expect(round.choiceCount, choiceCountForScore(session.score));
+      expect(round.choiceCount, choiceCountForLevel(session.level));
       finished = session.answer(round: round, correct: true);
     }
     expect(finished, isFalse);
     expect(session.score, 7);
+    expect(session.level, 11);
     expect(session.chances, 3);
-    expect(session.deal().choiceCount, choiceCountForScore(7));
+    expect(session.deal().choiceCount, choiceCountForLevel(11));
   });
 
   test('leaving before three misses is not a finished run', () {

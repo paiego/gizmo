@@ -2,15 +2,20 @@ import 'dart:math';
 
 import 'grammar.dart';
 
-/// How many choices a round shows for the score at the start of that round.
-int choiceCountForScore(int score) {
-  if (score < 0) {
-    throw ArgumentError.value(score, 'score', 'Score cannot be negative.');
+/// How many choices a round shows. [level] starts at 1.
+///
+/// Levels 1–3 show 3 choices, 4–6 show 4, 7–10 show 5, 11–14 show 6,
+/// 15–18 show 7, and 19 or more show 8 (seven decoys).
+int choiceCountForLevel(int level) {
+  if (level < 1) {
+    throw ArgumentError.value(level, 'level', 'Level starts at 1.');
   }
-  if (score <= 2) return 3;
-  if (score <= 5) return 4;
-  if (score <= 9) return 5;
-  return 6;
+  if (level <= 3) return 3;
+  if (level <= 6) return 4;
+  if (level <= 10) return 5;
+  if (level <= 14) return 6;
+  if (level <= 18) return 7;
+  return 8;
 }
 
 /// The original icon and the shuffled choices, which include the original.
@@ -25,39 +30,43 @@ class BuiltRound {
 
 enum _Slot { top, side, hole }
 
-/// Draws a round for [scoreSoFar].
+/// Draws a round for [level].
 ///
 /// The original is one of [BuiltRound.choices]. Each other icon follows the
-/// band for that score. A decoy is never equal to the original, and an
+/// band for that level. A decoy is never equal to the original, and an
 /// assembly appears at most once.
-BuiltRound buildRound({required int scoreSoFar, Random? random}) {
+BuiltRound buildRound({required int level, Random? random}) {
   final rng = random ?? Random();
   final original = _randomOriginal(rng);
   final used = <Assembly>{original};
   final List<Assembly> decoys;
-  if (scoreSoFar <= 2) {
+  if (level <= 3) {
     decoys = [
       _earlyDecoy(original, used, rng),
       _earlyDecoy(original, used, rng),
     ];
-  } else if (scoreSoFar <= 5) {
+  } else if (level <= 6) {
     decoys = [
       _keepBodySlotColor(original, used, rng),
       _bodyOnly(original, used, rng),
       _bodySlotColor(original, used, rng),
     ];
-  } else if (scoreSoFar <= 9) {
+  } else if (level <= 10) {
     decoys = [
       ..._colorTwins(original, used, rng),
       for (final slot in _twoSlots(rng)) _oneSlot(original, used, rng, slot),
     ];
-  } else {
+  } else if (level <= 14) {
     decoys = [
       ..._colorTwins(original, used, rng),
       for (final slot in _Slot.values) _oneSlot(original, used, rng, slot),
     ];
+  } else if (level <= 18) {
+    decoys = _wideDecoys(original, used, rng, pulse: false);
+  } else {
+    decoys = _wideDecoys(original, used, rng, pulse: true);
   }
-  final expected = choiceCountForScore(scoreSoFar);
+  final expected = choiceCountForLevel(level);
   if (decoys.length + 1 != expected) {
     throw StateError('Built ${decoys.length + 1} choices, expected $expected.');
   }
@@ -93,6 +102,32 @@ Assembly _randomOriginal(Random rng) {
     color: ColorId.values[rng.nextInt(ColorId.values.length)],
     pulse: PulseId.values[rng.nextInt(PulseId.values.length)],
   );
+}
+
+/// The five-decoy set, plus a body change, plus a pulse change when asked.
+List<Assembly> _wideDecoys(
+  Assembly original,
+  Set<Assembly> used,
+  Random rng, {
+  required bool pulse,
+}) {
+  return [
+    ..._colorTwins(original, used, rng),
+    for (final slot in _Slot.values) _oneSlot(original, used, rng, slot),
+    _bodyOnly(original, used, rng),
+    if (pulse) _pulseOnly(original, used, rng),
+  ];
+}
+
+Assembly _pulseOnly(Assembly original, Set<Assembly> used, Random rng) {
+  final pulses =
+      PulseId.values.where((pulse) => pulse != original.pulse).toList()
+        ..shuffle(rng);
+  for (final pulse in pulses) {
+    final candidate = original.copyWith(pulse: pulse);
+    if (used.add(candidate)) return candidate;
+  }
+  throw StateError('No pulse decoy for $original.');
 }
 
 /// Two same-shape decoys whose colors are far from [original].

@@ -94,11 +94,12 @@ void main() {
     );
   });
 
-  test('choice count uses correct rounds before that index', () {
-    final run = play(answers: [true, true, true, false, false, false]);
+  test('choice count follows the level, which steps up on a miss', () {
+    final run = play(answers: [false, true, true, true, false, false]);
     expect(run.rounds[0].choiceCount, 3);
     expect(run.rounds[2].choiceCount, 3);
     expect(run.rounds[3].choiceCount, 4);
+    expect(run.score, 3);
     expect(validateSubmittedRun(run), isNull);
 
     final swapped = SubmittedRun(
@@ -114,8 +115,9 @@ SubmittedRun play({required List<bool> answers}) {
   final random = Random(7);
   final rounds = <SubmittedRound>[];
   var score = 0;
+  var level = 1;
   for (final correct in answers) {
-    final built = buildRound(scoreSoFar: score, random: random);
+    final built = buildRound(level: level, random: random);
     rounds.add(
       SubmittedRound(
         index: rounds.length,
@@ -129,6 +131,7 @@ SubmittedRun play({required List<bool> answers}) {
         correct: correct,
       ),
     );
+    level += 1;
     if (correct) score += 1;
   }
   return SubmittedRun(playerName: 'Paul', score: score, rounds: rounds);

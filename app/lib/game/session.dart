@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:gizmo_rules/gizmo_rules.dart';
 
-import '../widgets/icon_curves.dart';
+import '../widgets/icon_shapes.dart';
 
 class PlayedRound {
   const PlayedRound({
@@ -25,18 +25,35 @@ class GameSession {
 
   final Random _random;
 
-  /// Misses do not end the run. The score still climbs so later layouts appear.
+  /// Misses do not end the run.
   final bool adminMode;
   final List<PlayedRound> rounds = [];
   int score = 0;
+
+  /// Starts at 1 and steps up once per finished round. A queued value replaces
+  /// that step for the next round. Difficulty follows this, not [score].
+  int level = 1;
   int chances = 3;
+  int? _queuedLevel;
 
   BuiltRound deal() {
     for (var attempt = 0; attempt < 12; attempt++) {
-      final round = buildRound(scoreSoFar: score, random: _random);
+      final round = buildRound(level: level, random: _random);
       if (_decoysDiffer(round)) return round;
     }
     throw StateError('Decoy equals the original.');
+  }
+
+  /// The next finished round moves to [value] instead of stepping up by one.
+  void queueLevel(int value) {
+    if (value < 1) {
+      throw ArgumentError.value(value, 'value', 'Level starts at 1.');
+    }
+    _queuedLevel = value;
+  }
+
+  void clearQueuedLevel() {
+    _queuedLevel = null;
   }
 
   bool _decoysDiffer(BuiltRound round) {
@@ -61,6 +78,13 @@ class GameSession {
       score += 1;
     } else if (!adminMode) {
       chances -= 1;
+    }
+    final queued = _queuedLevel;
+    if (queued != null) {
+      level = queued;
+      _queuedLevel = null;
+    } else {
+      level += 1;
     }
     return !adminMode && chances == 0;
   }

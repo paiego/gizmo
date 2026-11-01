@@ -85,7 +85,7 @@ class SubmittedRun {
 /// Returns a short reason when [run] breaks the rules, otherwise null.
 ///
 /// Checks follow the API contract: name, score, the three misses, length,
-/// indexes, grammar, attached parts, then the choice count for each score.
+/// indexes, grammar, attached parts, then the choice count for each level.
 String? validateSubmittedRun(SubmittedRun run) {
   if (parsePlayerName(run.playerName) == null) return 'invalid_name';
   if (run.score < 0) return 'invalid_score';
@@ -123,12 +123,10 @@ String? validateSubmittedRun(SubmittedRun run) {
     run.rounds.length,
     (index) => run.rounds.firstWhere((round) => round.index == index),
   );
-  var priorCorrect = 0;
   for (final round in ordered) {
-    if (round.choiceCount != choiceCountForScore(priorCorrect)) {
+    if (round.choiceCount != choiceCountForLevel(round.index + 1)) {
       return 'invalid_choice_count';
     }
-    if (round.correct) priorCorrect += 1;
   }
   return null;
 }

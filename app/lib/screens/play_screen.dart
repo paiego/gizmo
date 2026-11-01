@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 
@@ -9,10 +11,14 @@ import '../game/session.dart';
 import '../theme.dart';
 import '../widgets/chance_marks.dart';
 import '../widgets/gizmo_button.dart';
+import '../widgets/icon_shapes.dart';
 import '../widgets/icon_view.dart';
 import 'result_screen.dart';
 
 enum _Phase { look, gap, choose, correct, incorrect }
+
+/// Board travel, slides, and the correct-pick bounce are off for now.
+const _animate = false;
 
 enum _Edge { left, right, top, bottom }
 
@@ -61,11 +67,13 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
   late final AnimationController _cheer;
   static const _cheerSound = MethodChannel('gizmo/cheer');
   final _motion = math.Random();
+  final _nextLevel = TextEditingController();
   BuiltRound? _round;
   _Phase _phase = _Phase.look;
   _Edge _enterEdge = _Edge.left;
   _Edge _exitEdge = _Edge.right;
   List<_Edge> _choiceEdges = const [];
+  var _scatter = 0;
   int? _tapped;
   Timer? _timer;
   var _alive = true;
@@ -91,12 +99,8 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
     _timer?.cancel();
     _timer = Timer(_gapTime, () {
       if (!_alive || !mounted) return;
-      _enter.value = 0;
+      _enter.forward(from: 0);
       setState(() => _phase = _Phase.choose);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_alive || !mounted || _phase != _Phase.choose) return;
-        _enter.forward(from: 0);
-      });
     });
   }
 
@@ -110,6 +114,8 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
     _choiceEdges = [
       for (var index = 0; index < _round!.choices.length; index++) _pickEdge(),
     ];
+    _scatter = _motion.nextInt(1 << 30);
+    _nextLevel.clear();
     _enter.stop();
     _enter.value = 0;
     _cheer.stop();
@@ -140,7 +146,11 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
     });
     _timer?.cancel();
     if (!correct) {
-      _exit.forward(from: 0);
+      if (_animate) {
+        _exit.forward(from: 0);
+      } else {
+        _exit.value = 1;
+      }
       return;
     }
     _cheer.forward(from: 0);
@@ -167,6 +177,17 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _submitLevel(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      _session.clearQueuedLevel();
+      return;
+    }
+    final value = int.tryParse(trimmed);
+    if (value == null || value < 1) return;
+    _session.queueLevel(value);
+  }
+
   void _continue() {
     final round = _round;
     if (round == null || _phase != _Phase.incorrect || !_exit.isCompleted) {
@@ -177,6 +198,7 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
 
   void _finish({required BuiltRound round, required bool correct}) {
     if (!_alive || !mounted) return;
+    _submitLevel(_nextLevel.text);
     final finished = _session.answer(round: round, correct: correct);
     if (finished) {
       _alive = false;
@@ -199,6 +221,7 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
   void dispose() {
     _alive = false;
     _timer?.cancel();
+    _nextLevel.dispose();
     _look.removeStatusListener(_onLook);
     _look.dispose();
     _exit.dispose();
@@ -225,26 +248,70 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
                     onPressed: () => Navigator.maybePop(context),
                     icon: Icon(Icons.arrow_back, color: chrome.ink),
                   ),
-                  Text(
-                    'Score ',
-                    style: TextStyle(fontSize: 16, color: chrome.muted),
-                  ),
-                  Text(
-                    '${_session.score}',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: chrome.ink,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Text(
+                          'Score ',
+                          style: TextStyle(fontSize: 16, color: chrome.muted),
+                        ),
+                        Text(
+                          '${_session.score}',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: chrome.ink,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Level ',
+                          style: TextStyle(fontSize: 16, color: chrome.muted),
+                        ),
+                        Text(
+                          '${_session.level}',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: chrome.ink,
+                          ),
+                        ),
+                        if (widget.adminMode && _phase == _Phase.choose) ...[
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 64,
+                            child: TextField(
+                              controller: _nextLevel,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.done,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              onChanged: _submitLevel,
+                              onSubmitted: _submitLevel,
+                              style: TextStyle(fontSize: 16, color: chrome.ink),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                hintText: 'Next',
+                                filled: true,
+                                fillColor: chrome.paper,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ] else if (widget.adminMode) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            'Admin',
+                            style: TextStyle(fontSize: 13, color: chrome.muted),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  if (widget.adminMode) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      'Admin',
-                      style: TextStyle(fontSize: 13, color: chrome.muted),
-                    ),
-                  ],
-                  const Spacer(),
                   ChanceMarks(remaining: _session.chances),
                 ],
               ),
@@ -263,6 +330,8 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
                       enterEdge: _enterEdge,
                       exitEdge: _exitEdge,
                       choiceEdges: _choiceEdges,
+                      scatter: _scatter,
+                      cue: _session.rounds.isEmpty,
                       onTap: _tap,
                       onContinue: _continue,
                     ),
@@ -286,6 +355,8 @@ class _Board extends StatelessWidget {
     required this.enterEdge,
     required this.exitEdge,
     required this.choiceEdges,
+    required this.scatter,
+    required this.cue,
     required this.onTap,
     required this.onContinue,
   });
@@ -300,6 +371,10 @@ class _Board extends StatelessWidget {
   final _Edge enterEdge;
   final _Edge exitEdge;
   final List<_Edge> choiceEdges;
+  final int scatter;
+
+  /// First round of the run: the look and choice prompts.
+  final bool cue;
   final ValueChanged<int> onTap;
   final VoidCallback onContinue;
 
@@ -310,14 +385,26 @@ class _Board extends StatelessWidget {
       return LayoutBuilder(
         builder: (context, constraints) {
           final board = constraints.biggest;
-          final size =
-              math.min(board.width - 48, 280.0).clamp(120.0, 280.0).toDouble();
+          final size = _placeChoices(
+            board,
+            round.choices.length,
+            scatter,
+            topInset: cue ? 40 : 0,
+          ).cell;
           final block = size + 32;
           final iconLeft = (board.width - size) / 2;
           final iconTop = (board.height - block) / 2;
           return Stack(
             clipBehavior: Clip.hardEdge,
             children: [
+              if (cue)
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  top: math.max(4.0, iconTop - 40),
+                  height: 32,
+                  child: _Cue(label: 'Remember Me!'),
+                ),
               Positioned(
                 left: iconLeft,
                 top: iconTop,
@@ -357,11 +444,18 @@ class _Board extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final board = constraints.biggest;
-        final layout = _choiceLayout(board, round.choices.length);
+        final layout = _choiceLayout(
+          board,
+          round.choices.length,
+          scatter,
+          topInset: cue ? 40 : 0,
+        );
         return AnimatedBuilder(
           animation: Listenable.merge([exit, enter, cheer]),
           builder: (context, _) {
-            final t = phase == _Phase.incorrect ? exit.value : 0.0;
+            final t = phase == _Phase.incorrect
+                ? (_animate ? exit.value : 1.0)
+                : 0.0;
             final slide = _span(t, 0, _slideEnd, Curves.easeIn);
             final settle =
                 _span(t, _slideEnd, _settleEnd, Curves.easeInOutCubic);
@@ -374,9 +468,21 @@ class _Board extends StatelessWidget {
               settle: settle,
               originalIndex: originalIndex,
             );
+            final choiceTop = layout.slots
+                .map((slot) => slot.dy)
+                .reduce(math.min);
+            final shown = phase == _Phase.incorrect ? layout.pairCell : layout.cell;
             return Stack(
-              clipBehavior: Clip.none,
+              clipBehavior: Clip.hardEdge,
               children: [
+                if (cue && phase == _Phase.choose)
+                  Positioned(
+                    left: 20,
+                    right: 20,
+                    top: math.max(4.0, choiceTop - 40),
+                    height: 32,
+                    child: const _Cue(label: 'Find Me!'),
+                  ),
                 for (var index = 0; index < round.choices.length; index++)
                   _placed(
                     context: context,
@@ -391,8 +497,8 @@ class _Board extends StatelessWidget {
                 if (phase == _Phase.incorrect && dissolve > 0)
                   Positioned(
                     left: originalOffset.dx,
-                    top: originalOffset.dy + layout.cell + 10,
-                    width: layout.cell,
+                    top: originalOffset.dy + shown + 10,
+                    width: shown,
                     child: IgnorePointer(
                       child: Opacity(
                         opacity: dissolve,
@@ -445,8 +551,12 @@ class _Board extends StatelessWidget {
       settle: settle,
       originalIndex: originalIndex,
     );
+    final pairing = phase == _Phase.incorrect &&
+        (index == originalIndex || index == tapped);
+    final shown = pairing ? layout.pairCell : layout.cell;
     final cheering = phase == _Phase.correct && index == tapped;
-    final pulse = cheering ? math.sin(cheer.value * math.pi) : 0.0;
+    final pulse =
+        _animate && cheering ? math.sin(cheer.value * math.pi) : 0.0;
     final mark = cheering
         ? 1.0
         : phase == _Phase.incorrect && index == originalIndex
@@ -455,7 +565,7 @@ class _Board extends StatelessWidget {
     Widget icon = _Choice(
       key: ValueKey(index),
       assembly: round.choices[index],
-      size: layout.cell,
+      size: shown,
       mark: mark,
       onTap: phase == _Phase.choose ? () => onTap(index) : null,
     );
@@ -465,8 +575,8 @@ class _Board extends StatelessWidget {
     return Positioned(
       left: offset.dx,
       top: offset.dy,
-      width: layout.cell,
-      height: layout.cell,
+      width: shown,
+      height: shown,
       child: Stack(
         clipBehavior: Clip.none,
         fit: StackFit.expand,
@@ -474,17 +584,23 @@ class _Board extends StatelessWidget {
           icon,
           if (cheering && pulse > 0)
             IgnorePointer(
-              child: Opacity(
-                opacity: (1 - cheer.value).clamp(0.0, 1.0),
-                child: Transform.scale(
-                  scale: 0.82 + (0.46 * cheer.value),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color:
-                            GizmoLook.of(context).ink.withValues(alpha: 0.35),
-                        width: 3,
+              child: Center(
+                child: SizedBox.square(
+                  dimension: _choiceDiameter(layout.cell),
+                  child: Opacity(
+                    opacity: (1 - cheer.value).clamp(0.0, 1.0),
+                    child: Transform.scale(
+                      scale: 0.82 + (0.46 * cheer.value),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: GizmoLook.of(context)
+                                .ink
+                                .withValues(alpha: 0.35),
+                            width: 3,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -508,14 +624,14 @@ class _Board extends StatelessWidget {
         phase == _Phase.incorrect && index != originalIndex && index != tapped;
     final grid = layout.slots[index];
     if (leaving) {
-      return grid +
-          _offscreen(grid, layout, board, layout.centered[index]) * slide;
+      return grid + _offscreen(grid, layout, board) * slide;
     }
     if (phase == _Phase.incorrect && tapped != null) {
       final target = layout.pairSlot(index == originalIndex ? 0 : 1);
       return Offset.lerp(grid, target, settle)!;
     }
-    final arrived = Curves.easeOutCubic.transform(enter.value.clamp(0.0, 1.0));
+    final arrived =
+        Curves.easeOutCubic.transform(enter.value.clamp(0.0, 1.0));
     final travel = _edgeDelta(choiceEdges[index], grid, layout.cell, board);
     return Offset.lerp(grid + travel, grid, arrived)!;
   }
@@ -536,57 +652,229 @@ class _ChoiceLayout {
   final Size board;
   final double pairGap;
 
+  /// The side-by-side comparison shrinks when two full cells would leave the board.
+  double get pairCell => math.min(cell, (board.width - pairGap) / 2);
+
   Offset pairSlot(int place) {
-    final pairWidth = cell * 2 + pairGap;
-    final y = math.max(0.0, (board.height - _compareFooter - cell) / 2);
+    final shown = pairCell;
+    final pairWidth = shown * 2 + pairGap;
+    final y = math.max(0.0, (board.height - _compareFooter - shown) / 2);
     return Offset(
-      (board.width - pairWidth) / 2 + place * (cell + pairGap),
+      (board.width - pairWidth) / 2 + place * (shown + pairGap),
       y,
     );
   }
 }
 
-_ChoiceLayout _choiceLayout(Size board, int count) {
-  const gap = 12.0;
-  final raw = math
-      .min((board.width - 40 - gap) / 2, 140.0)
-      .clamp(48.0, 140.0)
-      .toDouble();
-  final rows = (count + 1) ~/ 2;
-  final gridWidth = raw * 2 + gap;
-  final gridHeight = rows * raw + (rows - 1) * gap;
-  final scale = math.min(
-    1.0,
-    math.min(board.width / (gridWidth + 40), board.height / gridHeight),
-  );
-  final cell = raw * scale;
-  final scaledGap = gap * scale;
-  final width = cell * 2 + scaledGap;
-  final height = rows * cell + (rows - 1) * scaledGap;
-  final origin = Offset((board.width - width) / 2, (board.height - height) / 2);
-  final slots = <Offset>[];
-  final centered = <bool>[];
-  for (var index = 0; index < count; index++) {
-    final alone = index == count - 1 && count.isOdd;
-    final x = alone
-        ? origin.dx + (width - cell) / 2
-        : origin.dx + (index % 2) * (cell + scaledGap);
-    final y = origin.dy + (index ~/ 2) * (cell + scaledGap);
-    slots.add(Offset(x, y));
-    centered.add(alone);
+const _boardMargin = 14.0;
+
+/// Inset used only to pick the icon size. Half of the old edge margin stays
+/// for placement, and this keeps each icon the size it had at 28 points.
+const _sizeMargin = 28.0;
+const _choiceGap = 12.0;
+
+/// Highest choice count. Every level uses a cell this full set can still pack.
+const _fullChoices = 8;
+
+/// One size for every level. The roomy early-game cell, capped so eight
+/// pictures still clear one another. The count on screen does not change it.
+double _iconSize(Size board) {
+  final roomy = _roomySize(board);
+  final packed = _maxPackedCell(board, _fullChoices);
+  return math.min(roomy, packed);
+}
+
+/// Half again the roomy estimate for a three-choice board.
+double _roomySize(Size board) {
+  final innerW = math.max(0.0, board.width - _sizeMargin * 2);
+  final innerH = math.max(0.0, board.height - _sizeMargin * 2);
+  const columns = 2;
+  const rows = 3;
+  const count = 3;
+  final widthBudget = innerW - _choiceGap * (columns - 1);
+  final heightBudget = innerH - _choiceGap * (rows - 1);
+  final cap = math.min(widthBudget / columns, heightBudget / rows);
+  final fromArea = math.sqrt(0.36 * innerW * innerH / count) - _choiceGap;
+  final grown = math.max(48.0, math.min(cap, fromArea)) * 1.5;
+  return math.min(grown, _largestFit(innerW, innerH, count));
+}
+
+/// Largest cell whose ink circles pack [count] icons inside the edge margin.
+double _maxPackedCell(Size board, int count) {
+  final innerW = math.max(0.0, board.width - _boardMargin * 2);
+  final innerH = math.max(0.0, board.height - _boardMargin * 2);
+  const ink = iconRadius * 2 / 100;
+  var best = 48.0;
+  for (var columns = 1; columns <= count; columns++) {
+    final rows = (count + columns - 1) ~/ columns;
+    final cell = math.min(
+      _axisCell(innerW, columns, ink),
+      _axisCell(innerH, rows, ink),
+    );
+    if (cell > best) best = cell;
   }
+  return best;
+}
+
+double _axisCell(double inner, int slots, double ink) {
+  if (slots <= 1) return inner;
+  final span = slots - 1;
+  return (inner - _choiceGap * span) / (1 + ink * span);
+}
+
+/// Largest cell that can pack [count] icons inside the inner board.
+double _largestFit(double innerW, double innerH, int count) {
+  var best = 48.0;
+  for (var columns = 1; columns <= count; columns++) {
+    final rows = (count + columns - 1) ~/ columns;
+    final cellW = (innerW - _choiceGap * (columns - 1)) / columns;
+    final cellH = (innerH - _choiceGap * (rows - 1)) / rows;
+    final fit = math.min(cellW, cellH);
+    if (fit > best) best = fit;
+  }
+  return best;
+}
+
+_ChoiceLayout _choiceLayout(
+  Size board,
+  int count,
+  int seed, {
+  double topInset = 0,
+}) {
+  final placed = _placeChoices(board, count, seed, topInset: topInset);
   return _ChoiceLayout(
-    cell: cell,
-    slots: slots,
-    centered: centered,
+    cell: placed.cell,
+    slots: placed.slots,
+    centered: List.filled(count, false),
     board: board,
-    pairGap: math.max(scaledGap, 24.0 * scale),
+    pairGap: math.max(_choiceGap, 24.0),
   );
 }
 
-Offset _offscreen(
-    Offset slot, _ChoiceLayout layout, Size board, bool centered) {
-  if (centered) return Offset(0, board.height - slot.dy + layout.cell);
+/// Random spots for [count] icons at the shared cell size. A full set that
+/// has no spare room lands on a jittered grid of the same size.
+({double cell, List<Offset> slots}) _placeChoices(
+  Size board,
+  int count,
+  int seed, {
+  double topInset = 0,
+}) {
+  final cell = _iconSize(board);
+  final minX = _boardMargin;
+  final minY = _boardMargin + topInset;
+  final maxX = math.max(minX, board.width - _boardMargin - cell);
+  final maxY = math.max(minY, board.height - _boardMargin - cell);
+  final need = cell * iconRadius * 2 / 100 + _choiceGap;
+  final random = math.Random(seed);
+  final slots = _scatter(count, minX, minY, maxX, maxY, need, random) ??
+      _inkGrid(count, minX, minY, maxX, maxY, need, random);
+  return (cell: cell, slots: slots);
+}
+
+/// Random spots inside the margins. Null when the ink circles have no spare room.
+List<Offset>? _scatter(
+  int count,
+  double minX,
+  double minY,
+  double maxX,
+  double maxY,
+  double need,
+  math.Random random,
+) {
+  if (maxX < minX || maxY < minY) return null;
+  for (var restart = 0; restart < 80; restart++) {
+    final slots = <Offset>[];
+    var filled = true;
+    for (var index = 0; index < count; index++) {
+      var placed = false;
+      for (var attempt = 0; attempt < 80; attempt++) {
+        final candidate = Offset(
+          minX + random.nextDouble() * (maxX - minX),
+          minY + random.nextDouble() * (maxY - minY),
+        );
+        if (slots.every((other) => _circlesApart(candidate, other, need))) {
+          slots.add(candidate);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        filled = false;
+        break;
+      }
+    }
+    if (filled) return slots;
+  }
+  return null;
+}
+
+/// Columns of ink circles at [need] apart, with leftover room used as jitter.
+List<Offset> _inkGrid(
+  int count,
+  double minX,
+  double minY,
+  double maxX,
+  double maxY,
+  double need,
+  math.Random random,
+) {
+  final spanX = math.max(0.0, maxX - minX);
+  final spanY = math.max(0.0, maxY - minY);
+  var columns = 1;
+  var bestSlack = double.negativeInfinity;
+  for (var cols = 1; cols <= count; cols++) {
+    final rows = (count + cols - 1) ~/ cols;
+    final slackX = spanX - (cols - 1) * need;
+    final slackY = spanY - (rows - 1) * need;
+    if (slackX < -0.5 || slackY < -0.5) continue;
+    final slack = math.min(slackX, slackY);
+    if (slack > bestSlack) {
+      bestSlack = slack;
+      columns = cols;
+    }
+  }
+  final rows = (count + columns - 1) ~/ columns;
+  final xs = _spread(columns, spanX, need, random);
+  final ys = _spread(rows, spanY, need, random);
+  final cells = [
+    for (var row = 0; row < rows; row++)
+      for (var col = 0; col < columns; col++)
+        Offset(minX + xs[col], minY + ys[row]),
+  ]..shuffle(random);
+  return cells.take(count).toList();
+}
+
+List<double> _spread(int slots, double span, double pitch, math.Random random) {
+  if (slots <= 1) {
+    final slack = math.max(0.0, span);
+    return [random.nextDouble() * slack];
+  }
+  final slack = span - (slots - 1) * pitch;
+  if (slack <= 0) {
+    final step = span / (slots - 1);
+    return [for (var i = 0; i < slots; i++) step * i];
+  }
+  final weights = [
+    for (var i = 0; i < slots + 1; i++) random.nextDouble() + 0.05,
+  ];
+  final sum = weights.fold(0.0, (total, weight) => total + weight);
+  var cursor = 0.0;
+  final positions = <double>[];
+  for (var i = 0; i < slots; i++) {
+    cursor += slack * weights[i] / sum;
+    positions.add(cursor);
+    cursor += pitch;
+  }
+  return positions;
+}
+
+bool _circlesApart(Offset a, Offset b, double need) {
+  final dx = a.dx - b.dx;
+  final dy = a.dy - b.dy;
+  return dx * dx + dy * dy >= need * need;
+}
+
+Offset _offscreen(Offset slot, _ChoiceLayout layout, Size board) {
   final mid = slot.dx + layout.cell / 2;
   if (mid < board.width / 2) return Offset(-(slot.dx + layout.cell + 8), 0);
   return Offset(board.width - slot.dx + 8, 0);
@@ -613,6 +901,7 @@ Offset _lookTravel({
   required Offset origin,
   required double extent,
 }) {
+  if (!_animate) return Offset.zero;
   final inward = _edgeDelta(enter, origin, extent, board);
   final outward = _edgeDelta(exit, origin, extent, board);
   if (t < _travelShare) {
@@ -650,33 +939,125 @@ class _Choice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = GizmoLook.of(context);
-    return Material(
-      color: const Color(0x00000000),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              IconView(assembly: assembly, size: size),
-              if (mark > 0)
-                IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: chrome.ink.withValues(alpha: mark),
-                        width: 3,
-                      ),
-                    ),
+    final diameter = _choiceDiameter(size);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          IconView(assembly: assembly, size: size),
+          SizedBox.square(
+            dimension: diameter,
+            child: _CircleTap(
+              onTap: onTap,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: chrome.ink.withValues(alpha: mark),
+                    width: mark > 0 ? 3 : 0,
                   ),
                 ),
-            ],
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Diameter of a choice circle: [iconRadius] plus [iconMargin].
+double _choiceDiameter(double size) {
+  return size * 2 * (iconRadius + iconMargin) / 100;
+}
+
+class _CircleTap extends SingleChildRenderObjectWidget {
+  const _CircleTap({required this.onTap, required super.child});
+
+  final VoidCallback? onTap;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderCircleTap(onTap);
+  }
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderCircleTap renderObject) {
+    renderObject.onTap = onTap;
+  }
+}
+
+class _RenderCircleTap extends RenderProxyBox {
+  _RenderCircleTap(this._onTap);
+
+  VoidCallback? _onTap;
+  TapGestureRecognizer? _tap;
+
+  set onTap(VoidCallback? value) {
+    if (value == _onTap) return;
+    _onTap = value;
+    _syncTap();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _syncTap();
+  }
+
+  @override
+  void detach() {
+    _tap?.dispose();
+    _tap = null;
+    super.detach();
+  }
+
+  void _syncTap() {
+    if (!attached) return;
+    if (_onTap == null) {
+      _tap?.dispose();
+      _tap = null;
+      return;
+    }
+    _tap ??= TapGestureRecognizer(debugOwner: this);
+    _tap!.onTap = _onTap;
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    final center = size.center(Offset.zero);
+    if ((position - center).distance > size.shortestSide / 2) return false;
+    hitTestChildren(result, position: position);
+    result.add(BoxHitTestEntry(this, position));
+    return true;
+  }
+
+  @override
+  void handleEvent(PointerEvent event, BoxHitTestEntry entry) {
+    if (event is PointerDownEvent) _tap?.addPointer(event);
+  }
+}
+
+class _Cue extends StatelessWidget {
+  const _Cue({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: GizmoLook.of(context).ink,
           ),
         ),
       ),

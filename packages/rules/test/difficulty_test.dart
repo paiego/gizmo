@@ -66,15 +66,19 @@ void main() {
     ]);
   });
 
-  test('choice count follows the score bands', () {
-    expect(choiceCountForScore(0), 3);
-    expect(choiceCountForScore(2), 3);
-    expect(choiceCountForScore(3), 4);
-    expect(choiceCountForScore(5), 4);
-    expect(choiceCountForScore(6), 5);
-    expect(choiceCountForScore(9), 5);
-    expect(choiceCountForScore(10), 6);
-    expect(choiceCountForScore(40), 6);
+  test('choice count follows the level bands', () {
+    expect(choiceCountForLevel(1), 3);
+    expect(choiceCountForLevel(3), 3);
+    expect(choiceCountForLevel(4), 4);
+    expect(choiceCountForLevel(6), 4);
+    expect(choiceCountForLevel(7), 5);
+    expect(choiceCountForLevel(10), 5);
+    expect(choiceCountForLevel(11), 6);
+    expect(choiceCountForLevel(14), 6);
+    expect(choiceCountForLevel(15), 7);
+    expect(choiceCountForLevel(18), 7);
+    expect(choiceCountForLevel(19), 8);
+    expect(choiceCountForLevel(41), 8);
   });
 
   test('pulse is none, core, or rim and is part of identity', () {
@@ -103,7 +107,7 @@ void main() {
     final colors = <ColorId>{};
     final pulses = <PulseId>{};
     for (var seed = 0; seed < 200; seed++) {
-      final round = buildRound(scoreSoFar: 0, random: Random(seed));
+      final round = buildRound(level: 1, random: Random(seed));
       bodies.add(round.original.body);
       holes.add(round.original.hole);
       colors.add(round.original.color);
@@ -117,9 +121,9 @@ void main() {
   });
 
   test('a decoy is never equal to the original', () {
-    for (final score in [0, 2, 3, 5, 6, 9, 10, 40]) {
+    for (final level in [1, 3, 4, 6, 7, 10, 11, 41]) {
       for (var seed = 0; seed < 80; seed++) {
-        final round = buildRound(scoreSoFar: score, random: Random(seed));
+        final round = buildRound(level: level, random: Random(seed));
         for (final choice in round.choices) {
           if (choice == round.original) continue;
           expect(choice, isNot(round.original));
@@ -135,17 +139,17 @@ void main() {
   test('the original is not always in the same cell', () {
     final positions = <int>{};
     for (var seed = 0; seed < 30; seed++) {
-      final round = buildRound(scoreSoFar: 0, random: Random(seed));
+      final round = buildRound(level: 1, random: Random(seed));
       positions.add(round.choices.indexOf(round.original));
     }
     expect(positions.length, greaterThan(1));
   });
 
-  for (final score in [0, 1, 2]) {
-    test('score $score decoys differ in body, color, and a side part', () {
+  for (final level in [1, 2, 3]) {
+    test('level $level decoys differ in body, color, and a side part', () {
       for (var seed = 0; seed < 40; seed++) {
-        final round = buildRound(scoreSoFar: score, random: Random(seed));
-        expectRoundShape(round, score);
+        final round = buildRound(level: level, random: Random(seed));
+        expectRoundShape(round, level);
         final decoys = round.choices.where((item) => item != round.original);
         expect(decoys, hasLength(2));
         for (final decoy in decoys) {
@@ -168,11 +172,11 @@ void main() {
     });
   }
 
-  for (final score in [3, 4, 5]) {
-    test('score $score fills the three mid-band roles', () {
+  for (final level in [4, 5, 6]) {
+    test('level $level fills the three mid-band roles', () {
       for (var seed = 0; seed < 40; seed++) {
-        final round = buildRound(scoreSoFar: score, random: Random(seed));
-        expectRoundShape(round, score);
+        final round = buildRound(level: level, random: Random(seed));
+        expectRoundShape(round, level);
         expectMidRoles(round.original, [
           for (final choice in round.choices)
             if (choice != round.original) choice,
@@ -181,22 +185,42 @@ void main() {
     });
   }
 
-  for (final score in [6, 7, 8, 9]) {
-    test('score $score uses distant colors and two different slots', () {
+  for (final level in [7, 8, 9, 10]) {
+    test('level $level uses distant colors and two different slots', () {
       for (var seed = 0; seed < 25; seed++) {
-        final round = buildRound(scoreSoFar: score, random: Random(seed));
-        expectRoundShape(round, score);
+        final round = buildRound(level: level, random: Random(seed));
+        expectRoundShape(round, level);
         expectHighBand(round.original, decoysOf(round), slots: 2);
       }
     });
   }
 
-  for (final score in [10, 11, 25]) {
-    test('score $score uses distant colors and every slot', () {
+  for (final level in [11, 12, 14]) {
+    test('level $level uses distant colors and every slot', () {
       for (var seed = 0; seed < 25; seed++) {
-        final round = buildRound(scoreSoFar: score, random: Random(seed));
-        expectRoundShape(round, score);
+        final round = buildRound(level: level, random: Random(seed));
+        expectRoundShape(round, level);
         expectHighBand(round.original, decoysOf(round), slots: 3);
+      }
+    });
+  }
+
+  for (final level in [15, 16, 18]) {
+    test('level $level adds a body decoy', () {
+      for (var seed = 0; seed < 25; seed++) {
+        final round = buildRound(level: level, random: Random(seed));
+        expectRoundShape(round, level);
+        expectWideBand(round.original, decoysOf(round), pulse: false);
+      }
+    });
+  }
+
+  for (final level in [19, 20, 41]) {
+    test('level $level adds a body decoy and a pulse decoy', () {
+      for (var seed = 0; seed < 25; seed++) {
+        final round = buildRound(level: level, random: Random(seed));
+        expectRoundShape(round, level);
+        expectWideBand(round.original, decoysOf(round), pulse: true);
       }
     });
   }
@@ -207,8 +231,8 @@ List<Assembly> decoysOf(BuiltRound round) => [
         if (choice != round.original) choice,
     ];
 
-void expectRoundShape(BuiltRound round, int score) {
-  expect(round.choiceCount, choiceCountForScore(score));
+void expectRoundShape(BuiltRound round, int level) {
+  expect(round.choiceCount, choiceCountForLevel(level));
   expect(round.choices, contains(round.original));
   expect(round.choices.toSet(), hasLength(round.choices.length));
   for (final choice in round.choices) {
@@ -299,4 +323,48 @@ void expectHighBand(
     expect(changed, {'top', 'side', 'hole'});
   }
   expect(colorDecoys.length + slotDecoys.length, decoys.length);
+}
+
+void expectWideBand(
+  Assembly original,
+  List<Assembly> decoys, {
+  required bool pulse,
+}) {
+  expect(decoys, hasLength(pulse ? 7 : 6));
+  var colors = 0;
+  var body = 0;
+  var pulses = 0;
+  final slots = <String>{};
+  for (final decoy in decoys) {
+    final diffs = <String>[
+      if (decoy.body != original.body) 'body',
+      if (decoy.top != original.top) 'top',
+      if (decoy.side != original.side) 'side',
+      if (decoy.hole != original.hole) 'hole',
+      if (decoy.color != original.color) 'color',
+      if (decoy.pulse != original.pulse) 'pulse',
+    ];
+    if (diffs.length == 1 && diffs.single == 'color') {
+      colors += 1;
+      expect(
+        distantColors(original.color),
+        contains(decoy.color),
+      );
+    } else if (diffs.length == 1 && diffs.single == 'body') {
+      body += 1;
+    } else if (diffs.length == 1 && diffs.single == 'pulse') {
+      pulses += 1;
+    } else if (diffs.length == 1 &&
+        decoy.body == original.body &&
+        decoy.color == original.color &&
+        decoy.pulse == original.pulse) {
+      slots.add(diffs.single);
+    } else {
+      fail('Decoy $decoy does not match a wide-band role for $original.');
+    }
+  }
+  expect(colors, 2);
+  expect(body, 1);
+  expect(pulses, pulse ? 1 : 0);
+  expect(slots, {'top', 'side', 'hole'});
 }

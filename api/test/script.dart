@@ -6,8 +6,9 @@ SubmittedRun scriptedRun(String name, List<bool> answers, {int seed = 1}) {
   final random = Random(seed);
   final rounds = <SubmittedRound>[];
   var score = 0;
+  var level = 1;
   for (final correct in answers) {
-    final built = buildRound(scoreSoFar: score, random: random);
+    final built = buildRound(level: level, random: random);
     rounds.add(
       SubmittedRound(
         index: rounds.length,
@@ -21,6 +22,7 @@ SubmittedRun scriptedRun(String name, List<bool> answers, {int seed = 1}) {
         correct: correct,
       ),
     );
+    level += 1;
     if (correct) score += 1;
   }
   final run = SubmittedRun(playerName: name, score: score, rounds: rounds);
