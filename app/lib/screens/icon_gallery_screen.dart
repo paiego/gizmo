@@ -8,7 +8,7 @@ import '../widgets/icon_shapes.dart';
 import '../widgets/icon_view.dart';
 
 /// How many distinct icons the gallery shows.
-const int galleryCount = 100;
+const int galleryCount = 1000;
 
 /// Two columns, with about three and a half rows on screen.
 const int galleryColumns = 2;
