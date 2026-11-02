@@ -7,7 +7,9 @@ import 'package:gizmo/game/session.dart';
 import 'package:gizmo/widgets/gizmo_button.dart';
 import 'package:gizmo/main.dart';
 import 'package:gizmo/name_store.dart';
+import 'package:gizmo/screens/icon_gallery_screen.dart';
 import 'package:gizmo/screens/play_screen.dart';
+import 'package:gizmo/widgets/icon_shapes.dart';
 import 'package:gizmo/theme.dart';
 import 'package:gizmo/widgets/icon_view.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
@@ -110,7 +112,8 @@ void main() {
     expect(find.text('Find Me!'), findsNothing);
   });
 
-  testWidgets('a wrong pick shows the original beside the pick', (tester) async {
+  testWidgets('a wrong pick shows the original beside the pick',
+      (tester) async {
     final round = buildRound(level: 1, random: Random(1));
     await tester.pumpWidget(
       MaterialApp(
@@ -318,6 +321,65 @@ void main() {
     expect(
         find.textContaining('Firebase has not been started'), findsOneWidget);
     expect(find.text('No Firebase id yet'), findsOneWidget);
+  });
+
+  test('the gallery is one hundred distinct icons', () {
+    expect(galleryAssemblies, hasLength(galleryCount));
+    for (var i = 0; i < galleryAssemblies.length; i++) {
+      for (var j = i + 1; j < galleryAssemblies.length; j++) {
+        expect(
+          samePicture(galleryAssemblies[i], galleryAssemblies[j]),
+          isFalse,
+        );
+      }
+    }
+  });
+
+  testWidgets('the profile gallery scrolls two columns in the active theme', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({NameStore.storageKey: 'Paul'});
+    _usePhoneSurface(tester);
+    await tester
+        .pumpWidget(GizmoApp(client: _FakeClient(), names: NameStore()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-profile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cold'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('open-icon-gallery')));
+    await tester.tap(find.byKey(const ValueKey('open-icon-gallery')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Icons'), findsOneWidget);
+    final gallery = find.byKey(const ValueKey('icon-gallery'));
+    expect(gallery, findsOneWidget);
+    final viewport = tester.getRect(gallery);
+    final visible = <Rect>[];
+    for (final element in find.byType(IconView).evaluate()) {
+      final rect = tester.getRect(find.byWidget(element.widget));
+      if (!rect.overlaps(viewport)) continue;
+      visible.add(rect);
+      final icon = element.widget as IconView;
+      expect(icon.palette, coldPalette);
+    }
+    final rows = <int, List<Rect>>{};
+    for (final rect in visible) {
+      final band = (rect.top / 8).round();
+      rows.putIfAbsent(band, () => []).add(rect);
+    }
+    expect(rows.length, inInclusiveRange(3, 4));
+    for (final row in rows.values) {
+      expect(row, hasLength(2));
+      expect((row[0].center.dx - row[1].center.dx).abs(), greaterThan(40));
+    }
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('gallery-icon-99')),
+      400,
+    );
+    expect(find.byKey(const ValueKey('gallery-icon-99')), findsOneWidget);
   });
 
   test('a dealt round starts at level 1', () {
