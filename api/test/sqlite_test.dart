@@ -8,28 +8,23 @@ import 'package:test/test.dart';
 import 'script.dart';
 
 void main() {
-  GizmoServer? server;
+  late Directory temp;
+  late GizmoServer server;
 
   setUpAll(() async {
-    try {
-      server = await GizmoServer.open().timeout(const Duration(seconds: 4));
-      await (server!.store as Database).migrate();
-    } catch (error) {
-      server = null;
-      stderr.writeln('Postgres is not available, skipping API checks: $error');
-    }
+    temp = await Directory.systemTemp.createTemp('gizmo-api');
+    server = await GizmoServer.open(
+      databasePath: '${temp.path}/gizmo.sqlite',
+    );
   });
 
   tearDownAll(() async {
-    await server?.close();
+    await server.close();
+    await temp.delete(recursive: true);
   });
 
   test('migrations and POST /v1/runs', () async {
     final api = server;
-    if (api == null) {
-      markTestSkipped('Postgres is not available.');
-      return;
-    }
 
     final suffix = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
     final ada = 'Ada$suffix';

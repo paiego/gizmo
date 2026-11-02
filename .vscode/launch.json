@@ -1,43 +1,61 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "API",
-      "type": "dart",
-      "request": "launch",
-      "program": "bin/server.dart",
-      "cwd": "${workspaceFolder}/api",
-      "console": "terminal"
-    },
-    {
-      "name": "App (console)",
-      "type": "dart",
-      "request": "launch",
-      "program": "lib/main.dart",
-      "cwd": "${workspaceFolder}/app",
-      "deviceId": "E106E733-122D-4B5B-9F3A-A7F220FBE697",
-      "console": "debugConsole"
-    },
-    {
-      "name": "App (iOS)",
-      "type": "dart",
-      "request": "launch",
-      "program": "lib/main.dart",
-      "cwd": "${workspaceFolder}/app",
-      "deviceId": "E106E733-122D-4B5B-9F3A-A7F220FBE697",
-      "console": "terminal"
-    }
-  ],
-  "compounds": [
-    {
-      "name": "API + App (console)",
-      "configurations": ["API", "App (console)"],
-      "stopAll": true
-    },
-    {
-      "name": "API + App (iOS)",
-      "configurations": ["API", "App (iOS)"],
-      "stopAll": true
-    }
-  ]
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "API",
+            "type": "dart",
+            "request": "launch",
+            "program": "bin/server.dart",
+            "cwd": "${workspaceFolder}/api",
+            "console": "terminal"
+        },
+        {
+            "name": "App (console)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "cwd": "${workspaceFolder}/app",
+            "deviceId": "29543289-D710-40BB-89D8-46E25AFB42D7",
+            "console": "debugConsole"
+        },
+        {
+            "name": "App (iOS)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "cwd": "${workspaceFolder}/app",
+            "deviceId": "29543289-D710-40BB-89D8-46E25AFB42D7",
+            "console": "terminal"
+        },
+        {
+            "name": "App (iOS, Hetzner)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "cwd": "${workspaceFolder}/app",
+            "deviceId": "29543289-D710-40BB-89D8-46E25AFB42D7",
+            "console": "terminal",
+            "toolArgs": [
+                "--dart-define=API_BASE_URL=http://2.28.68.117:8080"
+            ]
+        }
+    ],
+    "compounds": [
+        {
+            "name": "API + App (console)",
+            "configurations": [
+                "API",
+                "App (console)"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "API + App (iOS)",
+            "configurations": [
+                "API",
+                "App (iOS)"
+            ],
+            "stopAll": true
+        }
+    ]
 }

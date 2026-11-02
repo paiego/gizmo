@@ -35,17 +35,9 @@ Body, top, side, hole, and pulse change both shapes. The first shape uses the as
 
 ## Run locally
 
-Prerequisites: Flutter stable, the Dart SDK that ships with it, and Docker.
+Prerequisites: Flutter stable and the Dart SDK that ships with it.
 
-From this directory:
-
-```bash
-docker compose up -d
-```
-
-That starts Postgres with database `gizmo`, user `gizmo`, password `gizmo`, on port 5432.
-
-API, in a second terminal:
+API:
 
 ```bash
 cd api
@@ -53,13 +45,13 @@ dart pub get
 dart run bin/server.dart
 ```
 
-`DATABASE_URL` defaults to `postgres://gizmo:gizmo@localhost:5432/gizmo`. The process listens on `0.0.0.0:8080` and applies `migrations/*.sql` before it serves.
+`GIZMO_DB` defaults to `gizmo.sqlite` in the working directory. The process listens on `0.0.0.0:8080` and applies `migrations/*.sql` before it serves.
 
 ```bash
 curl http://localhost:8080/v1/health
 ```
 
-App, in a third terminal:
+App:
 
 ```bash
 cd app
@@ -85,4 +77,3 @@ cd api && dart test
 cd app && flutter analyze && flutter test
 ```
 
-The API suite that talks to Postgres is skipped when the database is down.

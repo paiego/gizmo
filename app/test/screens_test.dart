@@ -9,7 +9,6 @@ import 'package:gizmo/main.dart';
 import 'package:gizmo/name_store.dart';
 import 'package:gizmo/screens/play_screen.dart';
 import 'package:gizmo/theme.dart';
-import 'package:gizmo/widgets/icon_shapes.dart';
 import 'package:gizmo/widgets/icon_view.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -366,6 +365,38 @@ void main() {
     expect(find.byType(IconView), findsNWidgets(6));
   });
 
+  testWidgets('a high level shows the original for a quarter of the time', (
+    tester,
+  ) async {
+    final session = GameSession(random: Random(4), adminMode: true);
+    final round = buildRound(level: 1, random: Random(4));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayScreen(
+          playerName: 'Paul',
+          session: session,
+          adminMode: true,
+        ),
+      ),
+    );
+    await _reachChoices(tester);
+    await tester.enterText(find.byType(TextField), '19');
+    await tester.tap(
+      find.byKey(ValueKey(round.choices.indexOf(round.original))),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(session.level, 19);
+    expect(find.byType(IconView), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.byType(IconView), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.pump();
+    expect(find.byType(IconView), findsNothing);
+  });
+
   testWidgets('eight choices scatter inside the margins', (tester) async {
     _usePhoneSurface(tester);
     final session = GameSession(random: Random(4), adminMode: true);
@@ -402,7 +433,7 @@ void main() {
     ];
     final xs = <int>{};
     final ys = <int>{};
-    final ink = early.width * iconRadius * 2 / 100;
+    final ink = early.width - 2;
     for (final rect in rects) {
       expect(rect.width, closeTo(early.width, 0.5));
       expect(rect.height, closeTo(early.height, 0.5));

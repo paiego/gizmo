@@ -1,12 +1,10 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 
 import '../palette_scope.dart';
 import 'icon_shapes.dart';
 
-/// Paints one assembly as two shapes inside [iconRadius].
+/// Paints one assembly as two shapes, one pixel inside the cell.
 ///
 /// [palette] wins when set. Otherwise the surrounding [PaletteScope] is used,
 /// and a missing scope paints [warmPalette].
@@ -57,14 +55,17 @@ class IconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     paintCount += 1;
-    final scale = size.shortestSide / 100;
-    final matrix = _scaleMatrix(scale);
+    final side = size.shortestSide;
+    final reach = side / 2 - 1;
+    final scale = reach <= 0 ? side / 100 : reach / iconRadius;
+    canvas.save();
+    canvas.translate(side / 2, side / 2);
+    canvas.scale(scale);
+    canvas.translate(-iconCenter.dx, -iconCenter.dy);
     for (final shape in iconShapes(assembly)) {
-      canvas.drawPath(
-        shapePath(shape).transform(matrix),
-        _paint(shape, scale),
-      );
+      canvas.drawPath(shapePath(shape), _paint(shape, scale));
     }
+    canvas.restore();
   }
 
   Color _ink(IconShape shape) => Color(palette.values[shape.color]!);
@@ -91,11 +92,3 @@ class IconPainter extends CustomPainter {
       oldDelegate.phase != phase;
 }
 
-Float64List _scaleMatrix(double scale) {
-  return Float64List.fromList([
-    scale, 0, 0, 0, //
-    0, scale, 0, 0, //
-    0, 0, 1, 0, //
-    0, 0, 0, 1,
-  ]);
-}

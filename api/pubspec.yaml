@@ -9,8 +9,8 @@ environment:
 dependencies:
   gizmo_rules:
     path: ../packages/rules
-  postgres: ^3.5.6
   shelf: ^1.4.2
+  sqlite3: ^2.9.0
 
 dev_dependencies:
   lints: ^5.1.1

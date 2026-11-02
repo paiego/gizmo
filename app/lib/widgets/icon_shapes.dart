@@ -5,12 +5,8 @@ import 'package:gizmo_rules/gizmo_rules.dart';
 
 /// Circle every shape stays inside, in the 100-unit icon box.
 ///
-/// Every play icon uses one cell: the largest size that still leaves a margin
-/// around a full board. A radius of 32 keeps the ink inside that icon.
+/// Drawn icons scale this radius to one pixel inside the cell.
 const double iconRadius = 32;
-
-/// Empty ring between [iconRadius] and a choice circle, in icon units.
-const double iconMargin = 10;
 
 /// Center of [iconRadius] in the 100-unit box.
 const Offset iconCenter = Offset(50, 50);

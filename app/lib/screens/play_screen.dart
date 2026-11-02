@@ -11,7 +11,6 @@ import '../game/session.dart';
 import '../theme.dart';
 import '../widgets/chance_marks.dart';
 import '../widgets/gizmo_button.dart';
-import '../widgets/icon_shapes.dart';
 import '../widgets/icon_view.dart';
 import 'result_screen.dart';
 
@@ -23,6 +22,9 @@ const _animate = false;
 enum _Edge { left, right, top, bottom }
 
 const _lookTime = Duration(milliseconds: 3000);
+
+/// Level at which the original is shown for a quarter of [_lookTime].
+const _lookFloorLevel = 19;
 const _gapTime = Duration(milliseconds: 400);
 const _correctTime = Duration(milliseconds: 400);
 const _travelTime = Duration(milliseconds: 400);
@@ -34,6 +36,17 @@ const _offscreenMargin = 16.0;
 
 double get _travelShare =>
     _travelTime.inMilliseconds / _lookTime.inMilliseconds;
+
+/// How long the original stays up. Level 1 keeps [_lookTime]. Each later
+/// level is shorter, and level [_lookFloorLevel] and after hold at one quarter.
+Duration _lookDuration(int level) {
+  final steps = (level - 1).clamp(0, _lookFloorLevel - 1);
+  final drop = _lookTime.inMilliseconds * 3 ~/ 4;
+  final span = _lookFloorLevel - 1;
+  return Duration(
+    milliseconds: _lookTime.inMilliseconds - drop * steps ~/ span,
+  );
+}
 
 double get _slideEnd => _exitSlide.inMilliseconds / _exitMilliseconds;
 
@@ -120,6 +133,7 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
     _enter.value = 0;
     _cheer.stop();
     _cheer.value = 0;
+    _look.duration = _lookDuration(_session.level);
     _look.forward(from: 0);
     _exit.value = 0;
     if (notify && mounted) setState(() {});
@@ -703,23 +717,24 @@ double _roomySize(Size board) {
 double _maxPackedCell(Size board, int count) {
   final innerW = math.max(0.0, board.width - _boardMargin * 2);
   final innerH = math.max(0.0, board.height - _boardMargin * 2);
-  const ink = iconRadius * 2 / 100;
   var best = 48.0;
   for (var columns = 1; columns <= count; columns++) {
     final rows = (count + columns - 1) ~/ columns;
     final cell = math.min(
-      _axisCell(innerW, columns, ink),
-      _axisCell(innerH, rows, ink),
+      _axisCell(innerW, columns),
+      _axisCell(innerH, rows),
     );
     if (cell > best) best = cell;
   }
   return best;
 }
 
-double _axisCell(double inner, int slots, double ink) {
+/// Largest cell for [slots] along one side. Ink stops 1px inside the cell,
+/// and neighboring ink stays [_choiceGap] apart.
+double _axisCell(double inner, int slots) {
   if (slots <= 1) return inner;
   final span = slots - 1;
-  return (inner - _choiceGap * span) / (1 + ink * span);
+  return (inner - span * (_choiceGap - 2)) / slots;
 }
 
 /// Largest cell that can pack [count] icons inside the inner board.
@@ -764,7 +779,7 @@ _ChoiceLayout _choiceLayout(
   final minY = _boardMargin + topInset;
   final maxX = math.max(minX, board.width - _boardMargin - cell);
   final maxY = math.max(minY, board.height - _boardMargin - cell);
-  final need = cell * iconRadius * 2 / 100 + _choiceGap;
+  final need = math.max(0.0, cell - 2) + _choiceGap;
   final random = math.Random(seed);
   final slots = _scatter(count, minX, minY, maxX, maxY, need, random) ??
       _inkGrid(count, minX, minY, maxX, maxY, need, random);
@@ -969,10 +984,8 @@ class _Choice extends StatelessWidget {
   }
 }
 
-/// Diameter of a choice circle: [iconRadius] plus [iconMargin].
-double _choiceDiameter(double size) {
-  return size * 2 * (iconRadius + iconMargin) / 100;
-}
+/// Choice circle: 1px outside the ink, which is the cell edge.
+double _choiceDiameter(double size) => size;
 
 class _CircleTap extends SingleChildRenderObjectWidget {
   const _CircleTap({required this.onTap, required super.child});

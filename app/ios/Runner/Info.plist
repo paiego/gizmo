@@ -4,6 +4,11 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>GIDClientID</key>
 	<string>272689014623-gsc035vomuqd3pp58ei8j6ni5iubgqjd.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>
