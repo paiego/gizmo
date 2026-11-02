@@ -19,11 +19,11 @@ The app and the API both depend on `packages/rules`.
 
 ## Icons
 
-Each icon is two centered shapes, drawn in list order, first underneath. Both stay inside a circle of radius 32 centered at (50, 50). The first shape is the larger one. The second uses a smaller radius, so it sits inside the first.
+Each icon is three centered shapes, drawn in list order, first underneath. All stay inside a circle of radius 32 centered at (50, 50). Each layer is generated on its own. The first shape is the largest. The second and third use smaller radii, so they sit inside the one beneath them.
 
 | Value | What it sets |
 | --- | --- |
-| `kind` | Circle, square, triangle, pentagon, hexagon, or star |
+| `kind` | Circle, square, triangle, pentagon, hexagon, heptagon, octagon, nonagon, decagon, or star |
 | `radius` | Circumradius of this shape |
 | `rotation` | Turn of this shape. A circle stores 0 |
 | `color` | This shape's palette color |
@@ -31,7 +31,7 @@ Each icon is two centered shapes, drawn in list order, first underneath. Both st
 | `thickness` | Stroke width. A fill stores 0 |
 | `points` | Star points, 4, 5, or 6. Other kinds store 0 |
 
-Body, top, side, hole, and pulse change both shapes. The first shape uses the assembly color. The second uses another palette color. A star's inner points sit at 0.45 of its radius.
+Body, top, side, hole, and pulse change every layer. The first shape uses the assembly color. The second and third each pick another palette color from their own random sequence, without reading the other layers. A star's inner points sit at 0.45 of its radius.
 
 ## Run locally
 

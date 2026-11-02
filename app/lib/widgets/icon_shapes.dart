@@ -14,7 +14,30 @@ const Offset iconCenter = Offset(50, 50);
 /// Inner points of a star, as a fraction of its [IconShape.radius].
 const double starInner = 0.45;
 
-enum IconShapeKind { circle, square, triangle, pentagon, hexagon, star }
+enum IconShapeKind {
+  circle,
+  square,
+  triangle,
+  pentagon,
+  hexagon,
+  heptagon,
+  octagon,
+  nonagon,
+  decagon,
+  star,
+}
+
+/// Side counts for the regular polygons. Stars and circles are not in here.
+const Map<IconShapeKind, int> polygonSides = {
+  IconShapeKind.triangle: 3,
+  IconShapeKind.square: 4,
+  IconShapeKind.pentagon: 5,
+  IconShapeKind.hexagon: 6,
+  IconShapeKind.heptagon: 7,
+  IconShapeKind.octagon: 8,
+  IconShapeKind.nonagon: 9,
+  IconShapeKind.decagon: 10,
+};
 
 enum IconPaint { fill, stroke }
 
@@ -64,14 +87,18 @@ class IconShape {
       );
 }
 
-/// The two shapes that paint [assembly], larger one first.
+/// The three shapes that paint [assembly], larger one first.
 ///
-/// Body, top, side, hole, and pulse change both shapes. The first shape
-/// uses [Assembly.color]. The second uses another palette color.
+/// Each layer is generated on its own from [assembly] and that layer's
+/// index. A layer does not read another layer's kind, radius, rotation,
+/// color, paint, thickness, or points. Body, top, side, hole, and pulse
+/// change every layer. The first shape uses [Assembly.color]. Each later
+/// layer picks another palette color with its own random sequence.
 List<IconShape> iconShapes(Assembly assembly) {
   return [
     _shape(assembly, 0, 20, 27, 3.5, 6.5),
     _shape(assembly, 1, 10, 16, 2.0, 4.0),
+    _shape(assembly, 2, 9.93, 9.97, 1.2, 2.4),
   ];
 }
 
@@ -130,15 +157,7 @@ bool samePicture(Assembly a, Assembly b) {
   return true;
 }
 
-int _sides(IconShapeKind kind) {
-  return switch (kind) {
-    IconShapeKind.triangle => 3,
-    IconShapeKind.square => 4,
-    IconShapeKind.pentagon => 5,
-    IconShapeKind.hexagon => 6,
-    IconShapeKind.circle || IconShapeKind.star => 0,
-  };
-}
+int _sides(IconShapeKind kind) => polygonSides[kind] ?? 0;
 
 Offset _at(double angle, double reach) {
   return Offset(
@@ -165,13 +184,13 @@ IconShape _shape(
   double thicknessHi,
 ) {
   final random = math.Random(_seed(assembly, layer));
-  final kind = IconShapeKind.values[random.nextInt(IconShapeKind.values.length)];
+  final kind =
+      IconShapeKind.values[random.nextInt(IconShapeKind.values.length)];
   final paint = random.nextBool() ? IconPaint.fill : IconPaint.stroke;
   final thickness = paint == IconPaint.stroke
       ? thicknessLo + random.nextDouble() * (thicknessHi - thicknessLo)
       : 0.0;
-  final points =
-      kind == IconShapeKind.star ? 4 + random.nextInt(3) : 0;
+  final points = kind == IconShapeKind.star ? 4 + random.nextInt(3) : 0;
   final rotation =
       kind == IconShapeKind.circle ? 0.0 : random.nextDouble() * 2 * math.pi;
   final outset = paint == IconPaint.stroke ? thickness / 2 : 0.0;

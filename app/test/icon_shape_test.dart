@@ -39,7 +39,36 @@ void main() {
     );
   });
 
-  test('two shapes stay inside the icon and keep their own properties', () {
+  test('regular polygons from the triangle through the decagon close', () {
+    const sides = {
+      IconShapeKind.triangle: 3,
+      IconShapeKind.square: 4,
+      IconShapeKind.pentagon: 5,
+      IconShapeKind.hexagon: 6,
+      IconShapeKind.heptagon: 7,
+      IconShapeKind.octagon: 8,
+      IconShapeKind.nonagon: 9,
+      IconShapeKind.decagon: 10,
+    };
+    expect(polygonSides, sides);
+    for (final entry in sides.entries) {
+      final shape = IconShape(
+        kind: entry.key,
+        radius: 12,
+        rotation: 0,
+        color: ColorId.red,
+        paint: IconPaint.fill,
+        thickness: 0,
+        points: 0,
+      );
+      final points = shapePoints(shape);
+      expect(points, hasLength(entry.value), reason: '${entry.key}');
+      expect(points.first.dx, closeTo(50, 1e-9), reason: '${entry.key}');
+      expect(points.first.dy, closeTo(38, 1e-9), reason: '${entry.key}');
+    }
+  });
+
+  test('three shapes stay inside the icon and keep their own properties', () {
     expect(iconRadius, 32);
     final kinds = <IconShapeKind>{};
     final paints = <IconPaint>{};
@@ -62,18 +91,26 @@ void main() {
               );
               final shapes = iconShapes(assembly);
               expect(shapes, iconShapes(assembly), reason: '$assembly');
-              expect(shapes, hasLength(2), reason: '$assembly');
+              expect(shapes, hasLength(3), reason: '$assembly');
               expect(
-                shapes.first.radius,
-                greaterThan(shapes.last.radius),
+                shapes[0].radius,
+                greaterThan(shapes[1].radius),
                 reason: '$assembly draws the larger shape underneath',
               );
-              expect(shapes.first.color, assembly.color, reason: '$assembly');
               expect(
-                shapes.last.color,
-                isNot(shapes.first.color),
+                shapes[1].radius,
+                greaterThan(shapes[2].radius),
                 reason: '$assembly',
               );
+              expect(shapes[0].color, assembly.color, reason: '$assembly');
+              expect(shapes[1].color, isNot(shapes[0].color),
+                  reason: '$assembly');
+              expect(shapes[2].color, isNot(shapes[0].color),
+                  reason: '$assembly');
+              if (shapes[2].kind != shapes[0].kind &&
+                  shapes[2].kind != shapes[1].kind) {
+                splitKind = true;
+              }
               if (shapes.first.kind == shapes.last.kind) {
                 sharedKind = true;
               } else {
@@ -87,9 +124,8 @@ void main() {
                   closeTo(shape.radius, 1e-6),
                   reason: '$assembly ${shape.kind}',
                 );
-                final outset = shape.paint == IconPaint.stroke
-                    ? shape.thickness / 2
-                    : 0.0;
+                final outset =
+                    shape.paint == IconPaint.stroke ? shape.thickness / 2 : 0.0;
                 expect(
                   shape.radius + outset,
                   lessThanOrEqualTo(iconRadius + 1e-6),

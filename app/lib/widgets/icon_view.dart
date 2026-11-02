@@ -4,7 +4,7 @@ import 'package:gizmo_rules/gizmo_rules.dart';
 import '../palette_scope.dart';
 import 'icon_shapes.dart';
 
-/// Paints one assembly as two shapes, one pixel inside the cell.
+/// Paints one assembly as three shapes, one pixel inside the cell.
 ///
 /// [palette] wins when set. Otherwise the surrounding [PaletteScope] is used,
 /// and a missing scope paints [warmPalette].
@@ -91,4 +91,3 @@ class IconPainter extends CustomPainter {
       oldDelegate.palette != palette ||
       oldDelegate.phase != phase;
 }
-

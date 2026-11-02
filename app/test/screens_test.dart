@@ -323,8 +323,23 @@ void main() {
     expect(find.text('No Firebase id yet'), findsOneWidget);
   });
 
-  test('the gallery is one hundred distinct icons', () {
+  test('the gallery is one thousand distinct icons', () {
+    expect(galleryCount, 1000);
     expect(galleryAssemblies, hasLength(galleryCount));
+    expect(iconShapes(galleryAssemblies.first), hasLength(3));
+    final kinds = {
+      for (final assembly in galleryAssemblies)
+        for (final shape in iconShapes(assembly)) shape.kind,
+    };
+    expect(
+      kinds,
+      containsAll(const [
+        IconShapeKind.heptagon,
+        IconShapeKind.octagon,
+        IconShapeKind.nonagon,
+        IconShapeKind.decagon,
+      ]),
+    );
     for (var i = 0; i < galleryAssemblies.length; i++) {
       for (var j = i + 1; j < galleryAssemblies.length; j++) {
         expect(
