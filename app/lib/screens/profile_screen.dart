@@ -7,6 +7,7 @@ import '../account/firebase_auth.dart';
 import '../account/profile_pictures.dart';
 import '../theme.dart';
 import '../widgets/gizmo_button.dart';
+import 'icon_gallery_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -200,6 +201,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _ThemePicker(
               selectedId: _account.themeId,
               onSelected: (look) => _apply(_account.copyWith(themeId: look.id)),
+            ),
+            const SizedBox(height: 16),
+            GizmoButton(
+              key: const ValueKey('open-icon-gallery'),
+              label: 'Icon gallery',
+              filled: false,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (context) => const IconGalleryScreen(),
+                  ),
+                );
+              },
             ),
             if (_signInError != null) ...[
               const SizedBox(height: 16),
