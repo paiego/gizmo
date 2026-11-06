@@ -35,7 +35,7 @@ void main() {
     expect(colorValue, hasLength(8));
   });
 
-  test('a decoy color stays at least 100 away in RGB', () {
+  test('distant colors stay at least 100 away in RGB', () {
     var minimum = double.infinity;
     final closest = <(ColorId, ColorId)>[];
     for (final color in ColorId.values) {
@@ -145,85 +145,114 @@ void main() {
     expect(positions.length, greaterThan(1));
   });
 
-  for (final level in [1, 2, 3]) {
-    test('level $level decoys differ in body, color, and a side part', () {
-      for (var seed = 0; seed < 40; seed++) {
+  test('the closeness cap tightens on the choice-count bands', () {
+    expect(maxDecoyDistance(1), 32);
+    expect(maxDecoyDistance(3), maxDecoyDistance(1));
+    expect(maxDecoyDistance(4), 22);
+    expect(maxDecoyDistance(6), maxDecoyDistance(4));
+    expect(maxDecoyDistance(7), 14);
+    expect(maxDecoyDistance(10), maxDecoyDistance(7));
+    expect(maxDecoyDistance(11), 9);
+    expect(maxDecoyDistance(14), maxDecoyDistance(11));
+    expect(maxDecoyDistance(15), 5);
+    expect(maxDecoyDistance(18), maxDecoyDistance(15));
+    expect(maxDecoyDistance(19), 3.25);
+    expect(maxDecoyDistance(41), maxDecoyDistance(19));
+    expect(maxDecoyDistance(1), greaterThan(maxDecoyDistance(6)));
+    expect(maxDecoyDistance(6), greaterThan(maxDecoyDistance(10)));
+    expect(maxDecoyDistance(10), greaterThan(maxDecoyDistance(14)));
+    expect(maxDecoyDistance(14), greaterThan(maxDecoyDistance(18)));
+    expect(maxDecoyDistance(18), greaterThan(maxDecoyDistance(19)));
+    expect(
+      holeDecoyWeight + pulseDecoyWeight,
+      greaterThan(maxDecoyDistance(19)),
+    );
+    expect(bodyDecoyWeight, greaterThan(maxDecoyDistance(19)));
+  });
+
+  test('every decoy stays inside its level cap', () {
+    for (final level in [1, 3, 4, 6, 7, 10, 11, 14, 15, 18, 19, 41]) {
+      for (var seed = 0; seed < 20; seed++) {
         final round = buildRound(level: level, random: Random(seed));
         expectRoundShape(round, level);
-        final decoys = round.choices.where((item) => item != round.original);
-        expect(decoys, hasLength(2));
-        for (final decoy in decoys) {
-          expect(decoy.body, isNot(round.original.body));
+        for (final decoy in decoysOf(round)) {
           expect(
-            distantColors(round.original.color),
-            contains(decoy.color),
-          );
-          expect(
-            colorDistance(round.original.color, decoy.color),
-            greaterThanOrEqualTo(minDecoyColorDistance),
-          );
-          expect(
-            decoy.top != round.original.top ||
-                decoy.side != round.original.side,
-            isTrue,
+            decoyDistance(round.original, decoy),
+            lessThanOrEqualTo(maxDecoyDistance(level)),
           );
         }
       }
-    });
-  }
+    }
+  });
 
-  for (final level in [4, 5, 6]) {
-    test('level $level fills the three mid-band roles', () {
-      for (var seed = 0; seed < 40; seed++) {
+  test('late decoys sit closer than early ones', () {
+    final means = <int, double>{};
+    for (final level in [1, 6, 10, 14, 18, 19]) {
+      var total = 0.0;
+      var count = 0;
+      for (var seed = 0; seed < 24; seed++) {
         final round = buildRound(level: level, random: Random(seed));
-        expectRoundShape(round, level);
-        expectMidRoles(round.original, [
-          for (final choice in round.choices)
-            if (choice != round.original) choice,
-        ]);
+        for (final decoy in decoysOf(round)) {
+          total += decoyDistance(round.original, decoy);
+          count += 1;
+        }
       }
-    });
-  }
+      means[level] = total / count;
+    }
+    expect(means[1]!, greaterThan(means[6]!));
+    expect(means[6]!, greaterThan(means[10]!));
+    expect(means[10]!, greaterThan(means[14]!));
+    expect(means[14]!, greaterThan(means[18]!));
+    expect(means[18]!, greaterThan(means[19]!));
+    expect(means[1]!, greaterThan(means[19]! * 4));
+  });
 
-  for (final level in [7, 8, 9, 10]) {
-    test('level $level uses distant colors and two different slots', () {
-      for (var seed = 0; seed < 25; seed++) {
-        final round = buildRound(level: level, random: Random(seed));
-        expectRoundShape(round, level);
-        expectHighBand(round.original, decoysOf(round), slots: 2);
+  test('level 1 changes every field and level 19 changes one nearby field', () {
+    var earlyColor = 0.0;
+    var earlyColorCount = 0;
+    var lateColor = 0.0;
+    var lateColorCount = 0;
+    var earlyMin = double.infinity;
+    var lateMax = 0.0;
+    for (var seed = 0; seed < 30; seed++) {
+      final early = buildRound(level: 1, random: Random(seed));
+      final late = buildRound(level: 41, random: Random(seed + 1000));
+      for (final decoy in decoysOf(early)) {
+        final distance = decoyDistance(early.original, decoy);
+        earlyMin = min(earlyMin, distance);
+        expect(decoyFieldChanges(early.original, decoy), 6);
+        expect(decoy.body, isNot(early.original.body));
+        expect(
+          decoy.top != early.original.top || decoy.side != early.original.side,
+          isTrue,
+        );
+        final colorGap = colorDistance(early.original.color, decoy.color);
+        expect(colorGap, greaterThanOrEqualTo(minDecoyColorDistance));
+        earlyColor += colorGap;
+        earlyColorCount += 1;
       }
-    });
-  }
-
-  for (final level in [11, 12, 14]) {
-    test('level $level uses distant colors and every slot', () {
-      for (var seed = 0; seed < 25; seed++) {
-        final round = buildRound(level: level, random: Random(seed));
-        expectRoundShape(round, level);
-        expectHighBand(round.original, decoysOf(round), slots: 3);
+      for (final decoy in decoysOf(late)) {
+        final distance = decoyDistance(late.original, decoy);
+        lateMax = max(lateMax, distance);
+        expect(decoyFieldChanges(late.original, decoy), 1);
+        expect(decoy.body, late.original.body);
+        if (decoy.color != late.original.color) {
+          final colorGap = colorDistance(late.original.color, decoy.color);
+          expect(colorGap, lessThan(minDecoyColorDistance));
+          lateColor += colorGap;
+          lateColorCount += 1;
+        }
       }
-    });
-  }
-
-  for (final level in [15, 16, 18]) {
-    test('level $level adds a body decoy', () {
-      for (var seed = 0; seed < 25; seed++) {
-        final round = buildRound(level: level, random: Random(seed));
-        expectRoundShape(round, level);
-        expectWideBand(round.original, decoysOf(round), pulse: false);
-      }
-    });
-  }
-
-  for (final level in [19, 20, 41]) {
-    test('level $level adds a body decoy and a pulse decoy', () {
-      for (var seed = 0; seed < 25; seed++) {
-        final round = buildRound(level: level, random: Random(seed));
-        expectRoundShape(round, level);
-        expectWideBand(round.original, decoysOf(round), pulse: true);
-      }
-    });
-  }
+    }
+    expect(earlyMin, greaterThan(lateMax));
+    expect(earlyColorCount, greaterThan(0));
+    if (lateColorCount > 0) {
+      expect(
+        earlyColor / earlyColorCount,
+        greaterThan(lateColor / lateColorCount),
+      );
+    }
+  });
 }
 
 List<Assembly> decoysOf(BuiltRound round) => [
@@ -246,125 +275,4 @@ void expectRoundShape(BuiltRound round, int level) {
         choice.pulse != round.original.pulse;
     expect(differs, isTrue, reason: '$choice matches ${round.original}');
   }
-}
-
-int slotChanges(Assembly original, Assembly decoy) {
-  var count = 0;
-  if (original.top != decoy.top) count += 1;
-  if (original.side != decoy.side) count += 1;
-  if (original.hole != decoy.hole) count += 1;
-  return count;
-}
-
-void expectMidRoles(Assembly original, List<Assembly> decoys) {
-  var keepBody = 0;
-  var bodyOnly = 0;
-  var bodySlot = 0;
-  for (final decoy in decoys) {
-    final slots = slotChanges(original, decoy);
-    final bodyChanged = decoy.body != original.body;
-    final distant = distantColors(original.color).contains(decoy.color);
-    if (!bodyChanged && slots == 1 && distant) {
-      keepBody += 1;
-    } else if (bodyChanged && decoy.color == original.color && slots == 0) {
-      bodyOnly += 1;
-    } else if (bodyChanged && slots == 1 && distant) {
-      bodySlot += 1;
-    } else {
-      fail('Decoy $decoy does not match a mid-band role for $original.');
-    }
-  }
-  expect(keepBody, 1);
-  expect(bodyOnly, 1);
-  expect(bodySlot, 1);
-}
-
-bool sameShape(Assembly a, Assembly b) =>
-    a.body == b.body && a.top == b.top && a.side == b.side && a.hole == b.hole;
-
-void expectHighBand(
-  Assembly original,
-  List<Assembly> decoys, {
-  required int slots,
-}) {
-  final distant = distantColors(original.color).toSet();
-  final colorDecoys = [
-    for (final decoy in decoys)
-      if (sameShape(decoy, original)) decoy,
-  ];
-  expect(colorDecoys, hasLength(2));
-  final colors = colorDecoys.map((decoy) => decoy.color).toSet();
-  expect(colors, hasLength(2));
-  expect(distant.containsAll(colors), isTrue);
-  for (final decoy in colorDecoys) {
-    expect(
-      colorDistance(original.color, decoy.color),
-      greaterThanOrEqualTo(minDecoyColorDistance),
-    );
-  }
-
-  final slotDecoys = [
-    for (final decoy in decoys)
-      if (decoy.body == original.body && decoy.color == original.color) decoy,
-  ];
-  expect(slotDecoys, hasLength(slots));
-  final changed = <String>{};
-  for (final decoy in slotDecoys) {
-    final diffs = <String>[
-      if (decoy.top != original.top) 'top',
-      if (decoy.side != original.side) 'side',
-      if (decoy.hole != original.hole) 'hole',
-    ];
-    expect(diffs, hasLength(1), reason: '$decoy vs $original');
-    changed.add(diffs.single);
-  }
-  expect(changed, hasLength(slots));
-  if (slots == 3) {
-    expect(changed, {'top', 'side', 'hole'});
-  }
-  expect(colorDecoys.length + slotDecoys.length, decoys.length);
-}
-
-void expectWideBand(
-  Assembly original,
-  List<Assembly> decoys, {
-  required bool pulse,
-}) {
-  expect(decoys, hasLength(pulse ? 7 : 6));
-  var colors = 0;
-  var body = 0;
-  var pulses = 0;
-  final slots = <String>{};
-  for (final decoy in decoys) {
-    final diffs = <String>[
-      if (decoy.body != original.body) 'body',
-      if (decoy.top != original.top) 'top',
-      if (decoy.side != original.side) 'side',
-      if (decoy.hole != original.hole) 'hole',
-      if (decoy.color != original.color) 'color',
-      if (decoy.pulse != original.pulse) 'pulse',
-    ];
-    if (diffs.length == 1 && diffs.single == 'color') {
-      colors += 1;
-      expect(
-        distantColors(original.color),
-        contains(decoy.color),
-      );
-    } else if (diffs.length == 1 && diffs.single == 'body') {
-      body += 1;
-    } else if (diffs.length == 1 && diffs.single == 'pulse') {
-      pulses += 1;
-    } else if (diffs.length == 1 &&
-        decoy.body == original.body &&
-        decoy.color == original.color &&
-        decoy.pulse == original.pulse) {
-      slots.add(diffs.single);
-    } else {
-      fail('Decoy $decoy does not match a wide-band role for $original.');
-    }
-  }
-  expect(colors, 2);
-  expect(body, 1);
-  expect(pulses, pulse ? 1 : 0);
-  expect(slots, {'top', 'side', 'hole'});
 }

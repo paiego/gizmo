@@ -18,6 +18,75 @@ int choiceCountForLevel(int level) {
   return 8;
 }
 
+/// Body, top, side, hole, and pulse weights inside [decoyDistance].
+const double bodyDecoyWeight = 8;
+const double topDecoyWeight = 3;
+const double sideDecoyWeight = 3;
+const double holeDecoyWeight = 2;
+const double pulseDecoyWeight = 2;
+
+/// RGB distance is divided by this before it is added to [decoyDistance].
+///
+/// The nearest catalog pair (orange/amber, about 46) contributes about 1.9.
+/// The farthest pair (about 318) contributes about 12.7.
+const double colorDecoyScale = 25;
+
+/// How far [decoy] sits from [original].
+///
+/// A changed body adds [bodyDecoyWeight], top [topDecoyWeight], side
+/// [sideDecoyWeight], hole [holeDecoyWeight], and pulse [pulseDecoyWeight].
+/// A changed color adds [colorDistance] / [colorDecoyScale]. Zero is the
+/// same icon. The smallest two-field change is hole plus pulse, weight 4.
+double decoyDistance(Assembly original, Assembly decoy) {
+  var distance = 0.0;
+  if (original.body != decoy.body) distance += bodyDecoyWeight;
+  if (original.top != decoy.top) distance += topDecoyWeight;
+  if (original.side != decoy.side) distance += sideDecoyWeight;
+  if (original.hole != decoy.hole) distance += holeDecoyWeight;
+  if (original.pulse != decoy.pulse) distance += pulseDecoyWeight;
+  if (original.color != decoy.color) {
+    distance += colorDistance(original.color, decoy.color) / colorDecoyScale;
+  }
+  return distance;
+}
+
+/// How many catalog fields differ. Color counts as one field.
+int decoyFieldChanges(Assembly original, Assembly decoy) {
+  var count = 0;
+  if (original.body != decoy.body) count += 1;
+  if (original.top != decoy.top) count += 1;
+  if (original.side != decoy.side) count += 1;
+  if (original.hole != decoy.hole) count += 1;
+  if (original.color != decoy.color) count += 1;
+  if (original.pulse != decoy.pulse) count += 1;
+  return count;
+}
+
+/// Largest [decoyDistance] a decoy may have at [level].
+///
+/// The steps match [choiceCountForLevel]. A round keeps the farthest legal
+/// icons that still fit, so a higher level is a closer copy of the original.
+///
+/// * Levels 1–3 (32): body, top, side, hole, pulse, and a far color.
+/// * Levels 4–6 (22): those parts only with a nearer color, or fewer parts.
+/// * Levels 7–10 (14): a body plus two parts, or a body plus a mid color.
+/// * Levels 11–14 (9): a body, a few small parts, or a mid color.
+/// * Levels 15–18 (5): one part, or a color within about 125 RGB.
+/// * Levels 19 and up (3.25): one of top, side, hole, or pulse, or a color
+///   within 81 RGB. A body is 8 and the smallest two-part change is 4, so
+///   neither fits.
+double maxDecoyDistance(int level) {
+  if (level < 1) {
+    throw ArgumentError.value(level, 'level', 'Level starts at 1.');
+  }
+  if (level <= 3) return 32;
+  if (level <= 6) return 22;
+  if (level <= 10) return 14;
+  if (level <= 14) return 9;
+  if (level <= 18) return 5;
+  return 3.25;
+}
+
 /// The original icon and the shuffled choices, which include the original.
 class BuiltRound {
   const BuiltRound({required this.original, required this.choices});
@@ -28,44 +97,16 @@ class BuiltRound {
   int get choiceCount => choices.length;
 }
 
-enum _Slot { top, side, hole }
-
 /// Draws a round for [level].
 ///
-/// The original is one of [BuiltRound.choices]. Each other icon follows the
-/// band for that level. A decoy is never equal to the original, and an
-/// assembly appears at most once.
+/// The original is one of [BuiltRound.choices]. Each decoy is legal, unique,
+/// and within [maxDecoyDistance] of the original. Higher levels use a
+/// smaller cap, so shape, color, and the other catalog fields sit closer
+/// to the icon the player has to remember.
 BuiltRound buildRound({required int level, Random? random}) {
   final rng = random ?? Random();
   final original = _randomOriginal(rng);
-  final used = <Assembly>{original};
-  final List<Assembly> decoys;
-  if (level <= 3) {
-    decoys = [
-      _earlyDecoy(original, used, rng),
-      _earlyDecoy(original, used, rng),
-    ];
-  } else if (level <= 6) {
-    decoys = [
-      _keepBodySlotColor(original, used, rng),
-      _bodyOnly(original, used, rng),
-      _bodySlotColor(original, used, rng),
-    ];
-  } else if (level <= 10) {
-    decoys = [
-      ..._colorTwins(original, used, rng),
-      for (final slot in _twoSlots(rng)) _oneSlot(original, used, rng, slot),
-    ];
-  } else if (level <= 14) {
-    decoys = [
-      ..._colorTwins(original, used, rng),
-      for (final slot in _Slot.values) _oneSlot(original, used, rng, slot),
-    ];
-  } else if (level <= 18) {
-    decoys = _wideDecoys(original, used, rng, pulse: false);
-  } else {
-    decoys = _wideDecoys(original, used, rng, pulse: true);
-  }
+  final decoys = _decoysWithinCap(original, level, rng);
   final expected = choiceCountForLevel(level);
   if (decoys.length + 1 != expected) {
     throw StateError('Built ${decoys.length + 1} choices, expected $expected.');
@@ -104,271 +145,49 @@ Assembly _randomOriginal(Random rng) {
   );
 }
 
-/// The five-decoy set, plus a body change, plus a pulse change when asked.
-List<Assembly> _wideDecoys(
-  Assembly original,
-  Set<Assembly> used,
-  Random rng, {
-  required bool pulse,
-}) {
-  return [
-    ..._colorTwins(original, used, rng),
-    for (final slot in _Slot.values) _oneSlot(original, used, rng, slot),
-    _bodyOnly(original, used, rng),
-    if (pulse) _pulseOnly(original, used, rng),
-  ];
+/// Farthest legal icons that still fit under [maxDecoyDistance].
+///
+/// Shuffling before the stable sort keeps a tie from always picking the
+/// same catalog order.
+List<Assembly> _decoysWithinCap(Assembly original, int level, Random rng) {
+  final cap = maxDecoyDistance(level);
+  final pool = <(Assembly, double)>[];
+  for (final candidate in _catalog()) {
+    if (candidate == original) continue;
+    final distance = decoyDistance(original, candidate);
+    if (distance <= cap) pool.add((candidate, distance));
+  }
+  pool.shuffle(rng);
+  pool.sort((a, b) => b.$2.compareTo(a.$2));
+  final count = choiceCountForLevel(level) - 1;
+  if (pool.length < count) {
+    throw StateError(
+      'Only ${pool.length} decoys within $cap of $original at level $level.',
+    );
+  }
+  return [for (final scored in pool.take(count)) scored.$1];
 }
 
-Assembly _pulseOnly(Assembly original, Set<Assembly> used, Random rng) {
-  final pulses =
-      PulseId.values.where((pulse) => pulse != original.pulse).toList()
-        ..shuffle(rng);
-  for (final pulse in pulses) {
-    final candidate = original.copyWith(pulse: pulse);
-    if (used.add(candidate)) return candidate;
-  }
-  throw StateError('No pulse decoy for $original.');
-}
-
-/// Two same-shape decoys whose colors are far from [original].
-List<Assembly> _colorTwins(
-  Assembly original,
-  Set<Assembly> used,
-  Random rng,
-) {
-  final colors = distantColors(original.color)..shuffle(rng);
-  if (colors.length < 2) {
-    throw StateError('Need two distant colors for ${original.color}.');
-  }
-  final twins = <Assembly>[];
-  for (final color in colors.take(2)) {
-    final candidate = original.copyWith(color: color);
-    if (!used.add(candidate)) {
-      throw StateError('Distant color collided with $candidate.');
-    }
-    twins.add(candidate);
-  }
-  return twins;
-}
-
-Assembly _oneSlot(
-  Assembly original,
-  Set<Assembly> used,
-  Random rng,
-  _Slot slot,
-) {
-  final options = _slotValues(original, slot)..shuffle(rng);
-  for (final value in options) {
-    final candidate = _applySlot(original, slot, value);
-    if (used.add(candidate)) return candidate;
-  }
-  return _slotWithExtra(original, used, rng, slot);
-}
-
-/// The strict slot was taken. Change that slot and one other catalog value.
-Assembly _slotWithExtra(
-  Assembly original,
-  Set<Assembly> used,
-  Random rng,
-  _Slot slot,
-) {
-  final extras = _Slot.values.where((other) => other != slot).toList()
-    ..shuffle(rng);
-  for (final extra in extras) {
-    for (final first in _slotValues(original, slot)..shuffle(rng)) {
-      final once = _applySlot(original, slot, first);
-      for (final second in _slotValues(once, extra)..shuffle(rng)) {
-        final candidate = _applySlot(once, extra, second);
-        if (used.add(candidate)) return candidate;
-      }
-    }
-  }
-  throw StateError('No legal change for $slot on $original.');
-}
-
-Assembly _keepBodySlotColor(Assembly original, Set<Assembly> used, Random rng) {
-  final slots = _Slot.values.toList()..shuffle(rng);
-  final colors = distantColors(original.color)..shuffle(rng);
-  for (final slot in slots) {
-    for (final value in _slotValues(original, slot)..shuffle(rng)) {
-      for (final color in colors) {
-        final candidate = _applySlot(
-          original,
-          slot,
-          value,
-        ).copyWith(color: color);
-        if (used.add(candidate)) return candidate;
-      }
-    }
-  }
-  throw StateError('No keep-body decoy for $original.');
-}
-
-Assembly _bodyOnly(Assembly original, Set<Assembly> used, Random rng) {
-  final bodies = BodyId.values.where((body) => body != original.body).toList()
-    ..shuffle(rng);
-  for (final body in bodies) {
-    final candidate = original.copyWith(body: body);
-    if (used.add(candidate)) return candidate;
-  }
-  // The other bodies were taken. Change one slot as the extra catalog value
-  // and keep the color.
-  final slots = _Slot.values.toList()..shuffle(rng);
-  for (final body in bodies) {
-    final shifted = original.copyWith(body: body);
-    for (final slot in slots) {
-      for (final value in _slotValues(shifted, slot)..shuffle(rng)) {
-        final candidate = _applySlot(shifted, slot, value);
-        if (used.add(candidate)) return candidate;
-      }
-    }
-  }
-  throw StateError('No body-only decoy for $original.');
-}
-
-Assembly _bodySlotColor(Assembly original, Set<Assembly> used, Random rng) {
-  final bodies = BodyId.values.where((body) => body != original.body).toList()
-    ..shuffle(rng);
-  final slots = _Slot.values.toList()..shuffle(rng);
-  final colors = distantColors(original.color)..shuffle(rng);
-  for (final body in bodies) {
-    final shifted = original.copyWith(body: body);
-    for (final slot in slots) {
-      for (final value in _slotValues(shifted, slot)..shuffle(rng)) {
-        for (final color in colors) {
-          final candidate = _applySlot(
-            shifted,
-            slot,
-            value,
-          ).copyWith(color: color);
-          if (!candidate.isLegal) continue;
-          if (used.add(candidate)) return candidate;
+Iterable<Assembly> _catalog() sync* {
+  for (final body in BodyId.values) {
+    for (final top in TopId.values) {
+      for (final side in SideId.values) {
+        if (top == TopId.none && side == SideId.none) continue;
+        for (final hole in HoleId.values) {
+          for (final color in ColorId.values) {
+            for (final pulse in PulseId.values) {
+              yield Assembly(
+                body: body,
+                top: top,
+                side: side,
+                hole: hole,
+                color: color,
+                pulse: pulse,
+              );
+            }
+          }
         }
       }
     }
   }
-  throw StateError('No body-and-slot decoy for $original.');
-}
-
-Assembly _earlyDecoy(Assembly original, Set<Assembly> used, Random rng) {
-  final bodies = BodyId.values.where((body) => body != original.body).toList();
-  final colors = distantColors(original.color);
-  for (var attempt = 0; attempt < 80; attempt++) {
-    final candidate = _randomEarly(
-      original,
-      rng,
-      bodies: bodies,
-      colors: colors,
-      changeHole: attempt >= 40,
-    );
-    if (!candidate.isLegal) continue;
-    if (candidate.top == original.top && candidate.side == original.side) {
-      continue;
-    }
-    if (used.add(candidate)) return candidate;
-  }
-  return _exhaustiveEarly(original, used, rng);
-}
-
-Assembly _randomEarly(
-  Assembly original,
-  Random rng, {
-  required List<BodyId> bodies,
-  required List<ColorId> colors,
-  required bool changeHole,
-}) {
-  final mode = rng.nextInt(3);
-  var top = original.top;
-  var side = original.side;
-  if (mode != 1) top = _pickOther(TopId.values, top, rng);
-  if (mode != 0) side = _pickOther(SideId.values, side, rng);
-  if (top == TopId.none && side == SideId.none) {
-    if (rng.nextBool()) {
-      top = _pick(const [TopId.knob, TopId.horn, TopId.loop], rng);
-    } else {
-      side = _pick(const [SideId.tab, SideId.handle, SideId.wing], rng);
-    }
-  }
-  return Assembly(
-    body: bodies[rng.nextInt(bodies.length)],
-    top: top,
-    side: side,
-    hole: changeHole
-        ? _pickOther(HoleId.values, original.hole, rng)
-        : original.hole,
-    color: colors[rng.nextInt(colors.length)],
-    pulse: original.pulse,
-  );
-}
-
-Assembly _exhaustiveEarly(Assembly original, Set<Assembly> used, Random rng) {
-  final candidates = <Assembly>[
-    for (final body in BodyId.values)
-      if (body != original.body)
-        for (final color in distantColors(original.color))
-          for (final top in TopId.values)
-            for (final side in SideId.values)
-              if ((top != TopId.none || side != SideId.none) &&
-                  (top != original.top || side != original.side))
-                for (final hole in HoleId.values)
-                  Assembly(
-                    body: body,
-                    top: top,
-                    side: side,
-                    hole: hole,
-                    color: color,
-                    pulse: original.pulse,
-                  ),
-  ]..shuffle(rng);
-  for (final candidate in candidates) {
-    if (used.add(candidate)) return candidate;
-  }
-  throw StateError('Early decoy space exhausted for $original.');
-}
-
-List<Enum> _slotValues(Assembly assembly, _Slot slot) {
-  switch (slot) {
-    case _Slot.top:
-      return [
-        for (final top in TopId.values)
-          if (top != assembly.top &&
-              (top != TopId.none || assembly.side != SideId.none))
-            top,
-      ];
-    case _Slot.side:
-      return [
-        for (final side in SideId.values)
-          if (side != assembly.side &&
-              (assembly.top != TopId.none || side != SideId.none))
-            side,
-      ];
-    case _Slot.hole:
-      return [
-        for (final hole in HoleId.values)
-          if (hole != assembly.hole) hole,
-      ];
-  }
-}
-
-Assembly _applySlot(Assembly assembly, _Slot slot, Object value) {
-  switch (slot) {
-    case _Slot.top:
-      return assembly.copyWith(top: value as TopId);
-    case _Slot.side:
-      return assembly.copyWith(side: value as SideId);
-    case _Slot.hole:
-      return assembly.copyWith(hole: value as HoleId);
-  }
-}
-
-List<_Slot> _twoSlots(Random rng) {
-  final slots = _Slot.values.toList()..shuffle(rng);
-  return slots.take(2).toList();
-}
-
-T _pick<T>(List<T> values, Random rng) => values[rng.nextInt(values.length)];
-
-T _pickOther<T>(List<T> values, T current, Random rng) {
-  final others = values.where((value) => value != current).toList();
-  return others[rng.nextInt(others.length)];
 }

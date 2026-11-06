@@ -115,7 +115,10 @@ List<ColorId> nonAdjacentColors(ColorId color) {
   ];
 }
 
-/// Floor for a decoy color, in Euclidean RGB distance (0 to about 441).
+/// Floor used by [distantColors], in Euclidean RGB distance (0 to about 441).
+///
+/// Near pairs such as orange/amber sit under this. A round may use a nearer
+/// color; this floor only marks the far set.
 const double minDecoyColorDistance = 100;
 
 /// Euclidean RGB distance between two catalog colors.
@@ -130,9 +133,9 @@ double colorDistance(ColorId a, ColorId b) {
   return math.sqrt(sum);
 }
 
-/// Colors a decoy may use.
+/// Colors that sit far from [color].
 ///
-/// Skips the original and both ring neighbors, and keeps only colors at
+/// Skips the color itself and both ring neighbors, and keeps only colors at
 /// least [minDecoyColorDistance] away. The neighbor pairs orange/amber,
 /// red/pink, and green/teal sit under that floor.
 List<ColorId> distantColors(ColorId color) {
