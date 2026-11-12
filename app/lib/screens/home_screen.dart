@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../account/account.dart';
 import '../account/account_repository.dart';
+import '../account/firebase_auth.dart';
+import '../account/local_score.dart';
 import '../account/profile_pictures.dart';
 import '../api/gizmo_client.dart';
 import '../nav.dart';
@@ -18,12 +20,14 @@ class HomeScreen extends StatefulWidget {
     required this.client,
     required this.repository,
     required this.onAccount,
+    this.scores = const LocalScoreStore(),
   });
 
   final GizmoAccount account;
   final GizmoClient client;
   final AccountRepository repository;
   final ValueChanged<GizmoAccount> onAccount;
+  final LocalScoreStore scores;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -32,8 +36,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with RouteAware {
   PlayerSummary? _summary;
   String? _error;
+  String? _playError;
   var _loading = true;
+  var _starting = false;
   var _subscribed = false;
+  var _localBest = false;
 
   @override
   void initState() {
@@ -75,6 +82,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     setState(() {
       _loading = true;
       _error = null;
+      _localBest = false;
     });
     try {
       final summary = await widget.client.fetchBest(widget.account.username!);
@@ -85,11 +93,58 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       });
     } catch (_) {
       if (!mounted) return;
+      final id = widget.account.firebaseId;
+      final local =
+          id == null || id.isEmpty ? null : await widget.scores.read(id);
+      if (!mounted) return;
       setState(() {
-        _summary = null;
+        _summary = local == null
+            ? null
+            : PlayerSummary(
+                playerName: widget.account.username!,
+                bestScore: local.best,
+                runCount: local.runs,
+              );
+        _localBest = local != null;
         _loading = false;
-        _error = 'The scoreboard is unreachable.';
+        _error = local == null ? 'The scoreboard is unreachable.' : null;
       });
+    }
+  }
+
+  Future<void> _play() async {
+    if (_starting) return;
+    setState(() {
+      _starting = true;
+      _playError = null;
+    });
+    try {
+      final ticket = await widget.repository.preparePlay(widget.account);
+      if (!mounted) return;
+      widget.onAccount(ticket.account);
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PlayScreen(
+            playerName: ticket.account.username!,
+            adminMode: ticket.account.playingAdmin,
+            userId: ticket.userId,
+            localOnly: ticket.localOnly,
+            scores: widget.scores,
+          ),
+        ),
+      );
+    } on PlayRequiresSignIn catch (error) {
+      if (!mounted) return;
+      setState(() => _playError = error.toString());
+    } on GoogleSignInCanceled catch (error) {
+      if (!mounted) return;
+      setState(() => _playError = error.toString());
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _playError = error.toString());
+    } finally {
+      if (mounted) setState(() => _starting = false);
     }
   }
 
@@ -188,11 +243,14 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                   ],
                 ),
               ),
-              if (_error != null) ...[
+              if (_error != null || _localBest) ...[
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.only(right: 16),
-                  child: Text(_error!, style: TextStyle(color: look.muted)),
+                  child: Text(
+                    _localBest ? 'Saved on this device' : _error!,
+                    style: TextStyle(color: look.muted),
+                  ),
                 ),
               ],
               const Spacer(),
@@ -200,19 +258,16 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 padding: const EdgeInsets.only(right: 16),
                 child: Column(
                   children: [
+                    if (_playError != null) ...[
+                      Text(
+                        _playError!,
+                        style: TextStyle(color: look.muted),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     GizmoButton(
                       label: 'Play',
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PlayScreen(
-                              playerName: widget.account.username!,
-                              adminMode: widget.account.playingAdmin,
-                            ),
-                          ),
-                        );
-                      },
+                      onPressed: _starting ? null : _play,
                     ),
                     const SizedBox(height: 12),
                     GizmoButton(
