@@ -259,7 +259,7 @@ void main() {
     expect(maxMutationColorDistanceForSimilarity(1), 60);
     expect(maxMutationColorDistanceForSimilarity(0.5), closeTo(190, 0.001));
 
-    for (final similarity in [0.0, 0.25, 0.5, 0.75, 1.0]) {
+    for (final similarity in [0.0, 0.25, 0.5]) {
       final changes = decoyVariationCountForSimilarity(similarity);
       final colorCap = maxMutationColorDistanceForSimilarity(similarity);
       for (var seed = 0; seed < 6; seed++) {
@@ -293,7 +293,30 @@ void main() {
     }
   });
 
-  test('similarity 1.0 uses one catalog field and closest decoys', () {
+  test('high similarity uses one rendered property change', () {
+    for (final similarity in [0.75, 1.0]) {
+      final visualDelta = decoyVisualVariationCountForSimilarity(similarity);
+      expect(visualDelta, 1);
+      for (var seed = 0; seed < 12; seed++) {
+        final round = buildRound(
+          level: 6,
+          random: Random(seed),
+          decoySimilarity: similarity,
+        );
+        expectRoundShape(round, 6);
+        for (final decoy in decoysOf(round)) {
+          expect(
+            visualPropertyDelta(round.original, decoy),
+            1,
+            reason: '$decoy vs ${round.original}',
+          );
+          expect(samePicture(round.original, decoy), isFalse);
+        }
+      }
+    }
+  });
+
+  test('similarity 1.0 decoys are color-only catalog tweaks', () {
     for (final level in [1, 7, 19]) {
       for (var seed = 0; seed < 24; seed++) {
         final round = buildRound(
@@ -304,17 +327,12 @@ void main() {
         expectRoundShape(round, level);
         for (final decoy in decoysOf(round)) {
           expect(decoyFieldChanges(round.original, decoy), 1);
-          expect(
-            decoyDistance(round.original, decoy),
-            lessThan(bodyDecoyWeight),
-            reason: '$decoy should not swap body at similarity 1',
-          );
-          if (decoy.color != round.original.color) {
-            expect(
-              adjacentColors(round.original.color),
-              contains(decoy.color),
-            );
-          }
+          expect(decoy.color, isNot(round.original.color));
+          expect(decoy.body, round.original.body);
+          expect(decoy.top, round.original.top);
+          expect(decoy.side, round.original.side);
+          expect(decoy.hole, round.original.hole);
+          expect(decoy.pulse, round.original.pulse);
         }
       }
     }

@@ -1,126 +1,11 @@
-import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:gizmo_rules/gizmo_rules.dart';
+import 'package:gizmo_rules/gizmo_rules.dart' as rules;
 
-/// Circle every shape stays inside, in the 100-unit icon box.
-///
-/// Drawn icons scale this radius to one pixel inside the cell.
-const double iconRadius = 32;
+export 'package:gizmo_rules/gizmo_rules.dart' hide shapePoints, measuredRadius;
 
-/// Center of [iconRadius] in the 100-unit box.
+/// Center of [iconRadius] in the 100-unit box (Flutter [Offset]).
 const Offset iconCenter = Offset(50, 50);
-
-/// Inner points of a star, as a fraction of its [IconShape.radius].
-const double starInner = 0.45;
-
-enum IconShapeKind {
-  circle,
-  square,
-  triangle,
-  pentagon,
-  hexagon,
-  heptagon,
-  octagon,
-  nonagon,
-  decagon,
-  star,
-}
-
-/// Side counts for the regular polygons. Stars and circles are not in here.
-const Map<IconShapeKind, int> polygonSides = {
-  IconShapeKind.triangle: 3,
-  IconShapeKind.square: 4,
-  IconShapeKind.pentagon: 5,
-  IconShapeKind.hexagon: 6,
-  IconShapeKind.heptagon: 7,
-  IconShapeKind.octagon: 8,
-  IconShapeKind.nonagon: 9,
-  IconShapeKind.decagon: 10,
-};
-
-enum IconPaint { fill, stroke }
-
-/// One centered shape in an icon.
-///
-/// [radius] is the circumradius. A circle stores [rotation] 0. [thickness]
-/// is 0 for a fill. [points] is 0 unless [kind] is [IconShapeKind.star].
-class IconShape {
-  const IconShape({
-    required this.kind,
-    required this.radius,
-    required this.rotation,
-    required this.color,
-    required this.paint,
-    required this.thickness,
-    required this.points,
-  });
-
-  final IconShapeKind kind;
-  final double radius;
-  final double rotation;
-  final ColorId color;
-  final IconPaint paint;
-  final double thickness;
-  final int points;
-
-  @override
-  bool operator ==(Object other) =>
-      other is IconShape &&
-      other.kind == kind &&
-      other.radius == radius &&
-      other.rotation == rotation &&
-      other.color == color &&
-      other.paint == paint &&
-      other.thickness == thickness &&
-      other.points == points;
-
-  @override
-  int get hashCode => Object.hash(
-        kind,
-        radius,
-        rotation,
-        color,
-        paint,
-        thickness,
-        points,
-      );
-}
-
-/// The three shapes that paint [assembly], larger one first.
-///
-/// Each layer is generated on its own from [assembly] and that layer's
-/// index. A layer does not read another layer's kind, radius, rotation,
-/// color, paint, thickness, or points. Body, top, side, hole, and pulse
-/// change every layer. The first shape uses [Assembly.color]. Each later
-/// layer picks another palette color with its own random sequence.
-List<IconShape> iconShapes(Assembly assembly) {
-  return [
-    _shape(assembly, 0, 20, 27, 3.5, 6.5),
-    _shape(assembly, 1, 10, 16, 2.0, 4.0),
-    _shape(assembly, 2, 9.93, 9.97, 1.2, 2.4),
-  ];
-}
-
-/// Outline points. A circle reports the four compass points of its radius.
-List<Offset> shapePoints(IconShape shape) {
-  if (shape.kind == IconShapeKind.circle) {
-    return [
-      for (final angle in [0.0, math.pi / 2, math.pi, 3 * math.pi / 2])
-        _at(angle, shape.radius),
-    ];
-  }
-  final star = shape.kind == IconShapeKind.star;
-  final count = star ? shape.points * 2 : _sides(shape.kind);
-  final step = 2 * math.pi / count;
-  return [
-    for (var i = 0; i < count; i++)
-      _at(
-        shape.rotation - math.pi / 2 + i * step,
-        star && i.isOdd ? shape.radius * starInner : shape.radius,
-      ),
-  ];
-}
 
 Path shapePath(IconShape shape) {
   if (shape.kind == IconShapeKind.circle) {
@@ -131,89 +16,11 @@ Path shapePath(IconShape shape) {
 }
 
 /// Greatest distance from [iconCenter] to a point on [shape].
-double measuredRadius(IconShape shape) {
-  var farthest = 0.0;
-  for (final point in shapePoints(shape)) {
-    final distance = (point - iconCenter).distance;
-    if (distance > farthest) farthest = distance;
-  }
-  return farthest;
-}
+double measuredRadius(IconShape shape) => rules.measuredRadius(shape);
 
-/// True when [a] and [b] would paint as the same icon.
-///
-/// Equal assemblies match. A different color or pulse does not. Otherwise
-/// each shape's kind, radius, rotation, color, paint, thickness, and points
-/// are compared.
-bool samePicture(Assembly a, Assembly b) {
-  if (a == b) return true;
-  if (a.color != b.color || a.pulse != b.pulse) return false;
-  final left = iconShapes(a);
-  final right = iconShapes(b);
-  if (left.length != right.length) return false;
-  for (var i = 0; i < left.length; i++) {
-    if (left[i] != right[i]) return false;
-  }
-  return true;
-}
-
-int _sides(IconShapeKind kind) => polygonSides[kind] ?? 0;
-
-Offset _at(double angle, double reach) {
-  return Offset(
-    iconCenter.dx + math.cos(angle) * reach,
-    iconCenter.dy + math.sin(angle) * reach,
-  );
-}
-
-int _seed(Assembly assembly, int layer) {
-  return layer +
-      8 * assembly.body.index +
-      32 * assembly.top.index +
-      128 * assembly.side.index +
-      512 * assembly.hole.index +
-      2048 * assembly.pulse.index;
-}
-
-IconShape _shape(
-  Assembly assembly,
-  int layer,
-  double radiusLo,
-  double radiusHi,
-  double thicknessLo,
-  double thicknessHi,
-) {
-  final random = math.Random(_seed(assembly, layer));
-  final kind =
-      IconShapeKind.values[random.nextInt(IconShapeKind.values.length)];
-  final paint = random.nextBool() ? IconPaint.fill : IconPaint.stroke;
-  final thickness = paint == IconPaint.stroke
-      ? thicknessLo + random.nextDouble() * (thicknessHi - thicknessLo)
-      : 0.0;
-  final points = kind == IconShapeKind.star ? 4 + random.nextInt(3) : 0;
-  final rotation =
-      kind == IconShapeKind.circle ? 0.0 : random.nextDouble() * 2 * math.pi;
-  final outset = paint == IconPaint.stroke ? thickness / 2 : 0.0;
-  return IconShape(
-    kind: kind,
-    radius: _radius(random, iconRadius - outset, radiusLo, radiusHi),
-    rotation: rotation,
-    color: layer == 0 ? assembly.color : _otherColor(assembly.color, random),
-    paint: paint,
-    thickness: thickness,
-    points: points,
-  );
-}
-
-ColorId _otherColor(ColorId base, math.Random random) {
-  final index = colorRing.indexOf(base);
-  final shift = 1 + random.nextInt(colorRing.length - 1);
-  return colorRing[(index + shift) % colorRing.length];
-}
-
-double _radius(math.Random random, double limit, double lo, double hi) {
-  final high = math.min(hi, limit - 0.05);
-  final low = math.min(lo, high);
-  if (high <= low) return low;
-  return low + random.nextDouble() * (high - low);
+/// Outline points. A circle reports the four compass points of its radius.
+List<Offset> shapePoints(IconShape shape) {
+  return [
+    for (final point in rules.shapePoints(shape)) Offset(point.dx, point.dy),
+  ];
 }
