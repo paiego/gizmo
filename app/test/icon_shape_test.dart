@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gizmo/widgets/icon_shapes.dart';
 import 'package:gizmo/widgets/icon_view.dart';
-import 'package:gizmo_rules/gizmo_rules.dart';
+import 'package:gizmo_rules/gizmo_rules.dart'
+    hide shapePoints, measuredRadius, iconCenter;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -162,6 +163,31 @@ void main() {
     expect(starPoints, {4, 5, 6});
     expect(sharedKind, isTrue);
     expect(splitKind, isTrue);
+  });
+
+  test('different assemblies share the same on-screen ink reach', () {
+    const side = 200.0;
+    final reach = side / 2 - 1;
+    Assembly? smallest;
+    Assembly? largest;
+    var minInk = double.infinity;
+    var maxInk = 0.0;
+    for (final assembly in legalAssemblies()) {
+      final ink = assemblyInkRadius(assembly);
+      if (ink < minInk) {
+        minInk = ink;
+        smallest = assembly;
+      }
+      if (ink > maxInk) {
+        maxInk = ink;
+        largest = assembly;
+      }
+    }
+    expect(maxInk - minInk, greaterThan(3));
+    for (final assembly in [smallest!, largest!]) {
+      final scale = reach / assemblyInkRadius(assembly);
+      expect(scale * assemblyInkRadius(assembly), closeTo(reach, 1e-9));
+    }
   });
 
   test('a different part is not the same picture', () {

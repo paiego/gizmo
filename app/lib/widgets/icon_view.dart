@@ -57,7 +57,8 @@ class IconPainter extends CustomPainter {
     paintCount += 1;
     final side = size.shortestSide;
     final reach = side / 2 - 1;
-    final scale = reach <= 0 ? side / 100 : reach / iconRadius;
+    final ink = assemblyInkRadius(assembly);
+    final scale = reach <= 0 ? side / 100 : reach / ink;
     canvas.save();
     canvas.translate(side / 2, side / 2);
     canvas.scale(scale);
