@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:gizmo_rules/gizmo_rules.dart';
+import 'package:gizmo_rules/gizmo_rules.dart' hide iconCenter;
 
 import '../palette_scope.dart';
 import 'icon_shapes.dart';
