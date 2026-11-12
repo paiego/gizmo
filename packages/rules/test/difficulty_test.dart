@@ -292,6 +292,33 @@ void main() {
       }
     }
   });
+
+  test('similarity 1.0 uses one catalog field and closest decoys', () {
+    for (final level in [1, 7, 19]) {
+      for (var seed = 0; seed < 24; seed++) {
+        final round = buildRound(
+          level: level,
+          random: Random(seed),
+          decoySimilarity: 1,
+        );
+        expectRoundShape(round, level);
+        for (final decoy in decoysOf(round)) {
+          expect(decoyFieldChanges(round.original, decoy), 1);
+          expect(
+            decoyDistance(round.original, decoy),
+            lessThan(bodyDecoyWeight),
+            reason: '$decoy should not swap body at similarity 1',
+          );
+          if (decoy.color != round.original.color) {
+            expect(
+              adjacentColors(round.original.color),
+              contains(decoy.color),
+            );
+          }
+        }
+      }
+    }
+  });
 }
 
 int _unchangedFields(Assembly original, Assembly decoy) {
