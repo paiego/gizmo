@@ -20,13 +20,23 @@ class PlayedRound {
 
 /// One run. Chances start at three and do not refill.
 class GameSession {
-  GameSession({Random? random, this.adminMode = false})
-      : _random = random ?? Random();
+  GameSession({
+    Random? random,
+    this.adminMode = false,
+    this.decoySimilarity = 0,
+    this.levelBasedProximity = false,
+  }) : _random = random ?? Random();
 
   final Random _random;
 
   /// Misses do not end the run.
   final bool adminMode;
+
+  /// 0 is the wide decoy baseline. 1 changes one catalog field.
+  final double decoySimilarity;
+
+  /// When false, [decoySimilarity] alone sets how close decoys are.
+  final bool levelBasedProximity;
   final List<PlayedRound> rounds = [];
   int score = 0;
 
@@ -38,7 +48,12 @@ class GameSession {
 
   BuiltRound deal() {
     for (var attempt = 0; attempt < 12; attempt++) {
-      final round = buildRound(level: level, random: _random);
+      final round = buildRound(
+        level: level,
+        random: _random,
+        decoySimilarity: decoySimilarity,
+        levelBasedProximity: levelBasedProximity,
+      );
       if (_decoysDiffer(round)) return round;
     }
     throw StateError('Decoy equals the original.');

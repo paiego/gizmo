@@ -18,6 +18,8 @@ class ResultScreen extends StatefulWidget {
     this.userId,
     this.localOnly = false,
     this.scores = const LocalScoreStore(),
+    this.decoySimilarity = 0,
+    this.levelBasedProximity = false,
   });
 
   final String playerName;
@@ -27,6 +29,8 @@ class ResultScreen extends StatefulWidget {
   final String? userId;
   final bool localOnly;
   final LocalScoreStore scores;
+  final double decoySimilarity;
+  final bool levelBasedProximity;
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
@@ -179,6 +183,8 @@ class _ResultScreenState extends State<ResultScreen> {
                               builder: (context) => PlayScreen(
                                 playerName: widget.playerName,
                                 adminMode: widget.adminMode,
+                                decoySimilarity: widget.decoySimilarity,
+                                levelBasedProximity: widget.levelBasedProximity,
                                 userId: widget.userId,
                                 localOnly: widget.localOnly,
                                 scores: widget.scores,

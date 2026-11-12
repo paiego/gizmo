@@ -10,6 +10,8 @@ class GizmoAccount {
     this.adminMode = false,
     this.pictureId = defaultPictureId,
     this.themeId = 'warm',
+    this.decoySimilarity = 0,
+    this.levelBasedProximity = false,
   });
 
   static const defaultPictureId = 'disc';
@@ -24,6 +26,13 @@ class GizmoAccount {
   final String pictureId;
   final String themeId;
 
+  /// How alike decoys should be, from 0 (wider) to 1 (one field).
+  final double decoySimilarity;
+
+  /// When true, higher levels use closer decoys and [decoySimilarity] is
+  /// ignored. When false, only [decoySimilarity] sets closeness.
+  final bool levelBasedProximity;
+
   bool get signedIn => firebaseId != null && firebaseId!.isNotEmpty;
 
   bool get playingAdmin => admin && adminMode;
@@ -37,6 +46,8 @@ class GizmoAccount {
     bool? adminMode,
     String? pictureId,
     String? themeId,
+    double? decoySimilarity,
+    bool? levelBasedProximity,
   }) {
     return GizmoAccount(
       firebaseId: clearFirebaseId ? null : (firebaseId ?? this.firebaseId),
@@ -45,6 +56,8 @@ class GizmoAccount {
       adminMode: adminMode ?? this.adminMode,
       pictureId: pictureId ?? this.pictureId,
       themeId: themeId ?? this.themeId,
+      decoySimilarity: decoySimilarity ?? this.decoySimilarity,
+      levelBasedProximity: levelBasedProximity ?? this.levelBasedProximity,
     );
   }
 }
