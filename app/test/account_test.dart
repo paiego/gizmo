@@ -30,13 +30,21 @@ void main() {
       palettes: PaletteStore(),
     );
     await repository.save(
-      const GizmoAccount(username: 'Paul', themeId: 'cold', admin: true),
+      const GizmoAccount(
+        username: 'Paul',
+        themeId: 'cold',
+        admin: true,
+        decoySimilarity: 0.75,
+        levelBasedProximity: true,
+      ),
     );
 
     final loaded = await repository.read();
     expect(loaded.username, 'Paul');
     expect(loaded.themeId, 'cold');
     expect(loaded.admin, isTrue);
+    expect(loaded.decoySimilarity, 0.75);
+    expect(loaded.levelBasedProximity, isTrue);
     expect(loaded.firebaseId, isNull);
     expect(loaded.signedIn, isFalse);
 

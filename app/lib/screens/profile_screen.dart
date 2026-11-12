@@ -171,6 +171,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: _saveUsername,
             ),
             const SizedBox(height: 24),
+            Text('Decoy similarity', style: TextStyle(color: look.ink)),
+            const SizedBox(height: 4),
+            Text(
+              '1 means decoys are more like the original. '
+              '${_account.decoySimilarity.toStringAsFixed(2)}',
+              style: TextStyle(color: look.muted),
+            ),
+            Slider(
+              key: const ValueKey('decoy-similarity'),
+              value: _account.decoySimilarity.clamp(0.0, 1.0).toDouble(),
+              min: 0,
+              max: 1,
+              activeColor: look.ink,
+              onChanged: (value) =>
+                  _apply(_account.copyWith(decoySimilarity: value)),
+            ),
+            SwitchListTile(
+              key: const ValueKey('level-based-proximity'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Level-based proximity'),
+              subtitle: Text(
+                'Off uses only decoy similarity. On makes higher levels closer.',
+                style: TextStyle(color: look.muted),
+              ),
+              value: _account.levelBasedProximity,
+              activeThumbColor: look.ink,
+              onChanged: (value) =>
+                  _apply(_account.copyWith(levelBasedProximity: value)),
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Admin'),

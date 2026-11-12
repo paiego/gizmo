@@ -30,6 +30,7 @@ const double colorDecoyScale = 25;
 
 /// How many catalog fields a decoy changes at [level].
 ///
+/// Used only when [buildRound] is called with `levelBasedProximity: true`.
 /// Each decoy is the original with exactly this many fields replaced.
 /// The count steps down on the same bands as [choiceCountForLevel], so a
 /// higher level is a closer copy.
@@ -48,8 +49,9 @@ int decoyVariationCount(int level) {
   return 1;
 }
 
-/// Largest RGB distance allowed when a mutation changes color.
+/// Largest RGB distance allowed when a level-based mutation changes color.
 ///
+/// Used only when [buildRound] is called with `levelBasedProximity: true`.
 /// Levels 1–6 may use any other catalog color. Later levels pull that
 /// color toward the original, down to about 60 RGB from level 19.
 double maxMutationColorDistance(int level) {
@@ -61,6 +63,35 @@ double maxMutationColorDistance(int level) {
   if (level <= 14) return 160;
   if (level <= 18) return 110;
   return 60;
+}
+
+/// How many catalog fields [decoySimilarity] changes. Level is not an input.
+///
+/// [decoySimilarity] is clamped to 0..1. 0 is the wide baseline (4 fields).
+/// 1 changes a single field. The steps are 4, 3, 2, and 1 at 0, 0.25, 0.5,
+/// and 0.75.
+int decoyVariationCountForSimilarity(double decoySimilarity) {
+  final similarity = _clampSimilarity(decoySimilarity);
+  if (similarity >= 0.75) return 1;
+  if (similarity >= 0.5) return 2;
+  if (similarity >= 0.25) return 3;
+  return 4;
+}
+
+/// Largest RGB distance when a similarity mutation changes color.
+///
+/// 0 allows any other catalog color. 1 allows about 60 RGB, the nearest
+/// pairs. In between, the cap falls linearly from 320 to 60. Level does
+/// not enter this.
+double maxMutationColorDistanceForSimilarity(double decoySimilarity) {
+  final similarity = _clampSimilarity(decoySimilarity);
+  if (similarity <= 0) return double.infinity;
+  return 60 + (1 - similarity) * 260;
+}
+
+double _clampSimilarity(double decoySimilarity) {
+  if (decoySimilarity.isNaN) return 0;
+  return decoySimilarity.clamp(0.0, 1.0);
 }
 
 /// How far [decoy] sits from [original].
@@ -106,13 +137,33 @@ class BuiltRound {
 
 /// Draws a round for [level].
 ///
-/// The original is one of [BuiltRound.choices]. Every decoy is that same
-/// assembly with [decoyVariationCount] fields replaced. A decoy is legal,
-/// unique, and never equal to the original.
-BuiltRound buildRound({required int level, Random? random}) {
+/// The original is one of [BuiltRound.choices]. Choice count still follows
+/// [level]. Closeness does not, unless [levelBasedProximity] is true.
+///
+/// With level-based proximity off (the default), each decoy is the original
+/// with [decoyVariationCountForSimilarity] fields replaced.
+/// [decoySimilarity] is 0..1: 0 keeps the wide 4-field baseline, and 1
+/// changes one field. A changed color stays within
+/// [maxMutationColorDistanceForSimilarity].
+///
+/// With level-based proximity on, [decoySimilarity] is ignored and the
+/// legacy level table ([decoyVariationCount], [maxMutationColorDistance])
+/// decides closeness.
+BuiltRound buildRound({
+  required int level,
+  Random? random,
+  double decoySimilarity = 0,
+  bool levelBasedProximity = false,
+}) {
   final rng = random ?? Random();
   final original = _randomOriginal(rng);
-  final decoys = _mutateOriginal(original, level, rng);
+  final changes = levelBasedProximity
+      ? decoyVariationCount(level)
+      : decoyVariationCountForSimilarity(decoySimilarity);
+  final colorCap = levelBasedProximity
+      ? maxMutationColorDistance(level)
+      : maxMutationColorDistanceForSimilarity(decoySimilarity);
+  final decoys = _mutateOriginal(original, level, rng, changes, colorCap);
   final expected = choiceCountForLevel(level);
   if (decoys.length + 1 != expected) {
     throw StateError('Built ${decoys.length + 1} choices, expected $expected.');
@@ -153,11 +204,17 @@ Assembly _randomOriginal(Random rng) {
 
 enum _Field { body, top, side, hole, color, pulse }
 
-/// Legal mutations of [original] that change exactly [decoyVariationCount]
-/// fields. Shuffled, then trimmed to the decoy count for [level].
-List<Assembly> _mutateOriginal(Assembly original, int level, Random rng) {
-  final changes = decoyVariationCount(level);
-  final colorCap = maxMutationColorDistance(level);
+/// Legal mutations of [original] that change exactly [changes] fields.
+///
+/// [level] chooses how many decoys to keep. It does not choose [changes]
+/// or [colorCap]; the caller does.
+List<Assembly> _mutateOriginal(
+  Assembly original,
+  int level,
+  Random rng,
+  int changes,
+  double colorCap,
+) {
   final pool = _mutations(original, changes, colorCap)..shuffle(rng);
   final count = choiceCountForLevel(level) - 1;
   final picked = <Assembly>[];

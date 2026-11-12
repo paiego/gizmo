@@ -176,7 +176,11 @@ void main() {
       final changes = decoyVariationCount(level);
       final colorCap = maxMutationColorDistance(level);
       for (var seed = 0; seed < 20; seed++) {
-        final round = buildRound(level: level, random: Random(seed));
+        final round = buildRound(
+          level: level,
+          random: Random(seed),
+          levelBasedProximity: true,
+        );
         expectRoundShape(round, level);
         for (final decoy in decoysOf(round)) {
           expect(decoyFieldChanges(round.original, decoy), changes);
@@ -202,9 +206,21 @@ void main() {
     var earlyMin = double.infinity;
     var lateMax = 0.0;
     for (var seed = 0; seed < 24; seed++) {
-      final first = buildRound(level: 1, random: Random(seed));
-      final tenth = buildRound(level: 10, random: Random(seed));
-      final last = buildRound(level: 19, random: Random(seed + 100));
+      final first = buildRound(
+        level: 1,
+        random: Random(seed),
+        levelBasedProximity: true,
+      );
+      final tenth = buildRound(
+        level: 10,
+        random: Random(seed),
+        levelBasedProximity: true,
+      );
+      final last = buildRound(
+        level: 19,
+        random: Random(seed + 100),
+        levelBasedProximity: true,
+      );
       for (final decoy in decoysOf(first)) {
         final distance = decoyDistance(first.original, decoy);
         early += distance;
@@ -228,6 +244,53 @@ void main() {
     expect(earlyMin, greaterThan(lateMax));
     expect(early / earlyCount, greaterThan(mid / midCount));
     expect(mid / midCount, greaterThan(late / lateCount));
+  });
+
+  test('similarity sets the field count and ignores level', () {
+    expect(decoyVariationCountForSimilarity(0), 4);
+    expect(decoyVariationCountForSimilarity(0.24), 4);
+    expect(decoyVariationCountForSimilarity(0.25), 3);
+    expect(decoyVariationCountForSimilarity(0.5), 2);
+    expect(decoyVariationCountForSimilarity(0.75), 1);
+    expect(decoyVariationCountForSimilarity(1), 1);
+    expect(decoyVariationCountForSimilarity(-1), 4);
+    expect(decoyVariationCountForSimilarity(2), 1);
+    expect(maxMutationColorDistanceForSimilarity(0), double.infinity);
+    expect(maxMutationColorDistanceForSimilarity(1), 60);
+    expect(maxMutationColorDistanceForSimilarity(0.5), closeTo(190, 0.001));
+
+    for (final similarity in [0.0, 0.25, 0.5, 0.75, 1.0]) {
+      final changes = decoyVariationCountForSimilarity(similarity);
+      final colorCap = maxMutationColorDistanceForSimilarity(similarity);
+      for (var seed = 0; seed < 6; seed++) {
+        final early = buildRound(
+          level: 1,
+          random: Random(seed),
+          decoySimilarity: similarity,
+        );
+        final late = buildRound(
+          level: 99,
+          random: Random(seed + 50),
+          decoySimilarity: similarity,
+        );
+        expect(early.choiceCount, choiceCountForLevel(1));
+        expect(late.choiceCount, choiceCountForLevel(99));
+        for (final round in [early, late]) {
+          final level = round == early ? 1 : 99;
+          expectRoundShape(round, level);
+          for (final decoy in decoysOf(round)) {
+            expect(decoyFieldChanges(round.original, decoy), changes);
+            expect(_unchangedFields(round.original, decoy), 6 - changes);
+            if (decoy.color != round.original.color) {
+              expect(
+                colorDistance(round.original.color, decoy.color),
+                lessThanOrEqualTo(colorCap),
+              );
+            }
+          }
+        }
+      }
+    }
   });
 }
 

@@ -66,11 +66,15 @@ class PlayScreen extends StatefulWidget {
     this.userId,
     this.localOnly = false,
     this.scores = const LocalScoreStore(),
+    this.decoySimilarity = 0,
+    this.levelBasedProximity = false,
   });
 
   final String playerName;
   final GameSession? session;
   final bool adminMode;
+  final double decoySimilarity;
+  final bool levelBasedProximity;
 
   /// Firebase user id this run is allowed to score. Null on the online path
   /// until the result screen submits to the server.
@@ -106,7 +110,12 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _session = widget.session ?? GameSession(adminMode: widget.adminMode);
+    _session = widget.session ??
+        GameSession(
+          adminMode: widget.adminMode,
+          decoySimilarity: widget.decoySimilarity,
+          levelBasedProximity: widget.levelBasedProximity,
+        );
     _look = AnimationController(vsync: this, duration: _lookTime)
       ..addStatusListener(_onLook);
     _exit = AnimationController(
@@ -235,6 +244,8 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
             playerName: widget.playerName,
             transcript: _session.transcript(widget.playerName),
             adminMode: widget.adminMode,
+            decoySimilarity: widget.decoySimilarity,
+            levelBasedProximity: widget.levelBasedProximity,
             userId: widget.userId,
             localOnly: widget.localOnly,
             scores: widget.scores,
@@ -482,9 +493,8 @@ class _Board extends StatelessWidget {
         return AnimatedBuilder(
           animation: Listenable.merge([exit, enter, cheer]),
           builder: (context, _) {
-            final t = phase == _Phase.incorrect
-                ? (_animate ? exit.value : 1.0)
-                : 0.0;
+            final t =
+                phase == _Phase.incorrect ? (_animate ? exit.value : 1.0) : 0.0;
             final slide = _span(t, 0, _slideEnd, Curves.easeIn);
             final settle =
                 _span(t, _slideEnd, _settleEnd, Curves.easeInOutCubic);
@@ -497,10 +507,10 @@ class _Board extends StatelessWidget {
               settle: settle,
               originalIndex: originalIndex,
             );
-            final choiceTop = layout.slots
-                .map((slot) => slot.dy)
-                .reduce(math.min);
-            final shown = phase == _Phase.incorrect ? layout.pairCell : layout.cell;
+            final choiceTop =
+                layout.slots.map((slot) => slot.dy).reduce(math.min);
+            final shown =
+                phase == _Phase.incorrect ? layout.pairCell : layout.cell;
             return Stack(
               clipBehavior: Clip.hardEdge,
               children: [
@@ -584,8 +594,7 @@ class _Board extends StatelessWidget {
         (index == originalIndex || index == tapped);
     final shown = pairing ? layout.pairCell : layout.cell;
     final cheering = phase == _Phase.correct && index == tapped;
-    final pulse =
-        _animate && cheering ? math.sin(cheer.value * math.pi) : 0.0;
+    final pulse = _animate && cheering ? math.sin(cheer.value * math.pi) : 0.0;
     final mark = cheering
         ? 1.0
         : phase == _Phase.incorrect && index == originalIndex
@@ -659,8 +668,7 @@ class _Board extends StatelessWidget {
       final target = layout.pairSlot(index == originalIndex ? 0 : 1);
       return Offset.lerp(grid, target, settle)!;
     }
-    final arrived =
-        Curves.easeOutCubic.transform(enter.value.clamp(0.0, 1.0));
+    final arrived = Curves.easeOutCubic.transform(enter.value.clamp(0.0, 1.0));
     final travel = _edgeDelta(choiceEdges[index], grid, layout.cell, board);
     return Offset.lerp(grid + travel, grid, arrived)!;
   }

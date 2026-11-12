@@ -28,6 +28,8 @@ class AccountRepository {
   static const adminKey = 'account_admin';
   static const adminModeKey = 'account_admin_mode';
   static const pictureKey = 'account_picture';
+  static const decoySimilarityKey = 'decoy_similarity';
+  static const levelBasedProximityKey = 'level_based_proximity';
 
   Future<GizmoAccount> read() async {
     final prefs = await SharedPreferences.getInstance();
@@ -41,6 +43,8 @@ class AccountRepository {
       adminMode: prefs.getBool(adminModeKey) ?? false,
       pictureId: prefs.getString(pictureKey) ?? GizmoAccount.defaultPictureId,
       themeId: themeId ?? 'warm',
+      decoySimilarity: _similarity(prefs.getDouble(decoySimilarityKey)),
+      levelBasedProximity: prefs.getBool(levelBasedProximityKey) ?? false,
     );
   }
 
@@ -60,6 +64,16 @@ class AccountRepository {
     await prefs.setBool(adminKey, account.admin);
     await prefs.setBool(adminModeKey, account.admin && account.adminMode);
     await prefs.setString(pictureKey, account.pictureId);
+    await prefs.setDouble(
+      decoySimilarityKey,
+      _similarity(account.decoySimilarity),
+    );
+    await prefs.setBool(levelBasedProximityKey, account.levelBasedProximity);
+  }
+
+  static double _similarity(double? value) {
+    if (value == null || value.isNaN) return 0;
+    return value.clamp(0.0, 1.0).toDouble();
   }
 
   /// Asks Firebase Auth for the account id. See [requestFirebaseUserId].

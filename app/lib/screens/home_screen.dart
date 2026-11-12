@@ -128,6 +128,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           builder: (context) => PlayScreen(
             playerName: ticket.account.username!,
             adminMode: ticket.account.playingAdmin,
+            decoySimilarity: ticket.account.decoySimilarity,
+            levelBasedProximity: ticket.account.levelBasedProximity,
             userId: ticket.userId,
             localOnly: ticket.localOnly,
             scores: widget.scores,
