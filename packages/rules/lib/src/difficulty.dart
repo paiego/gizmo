@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'grammar.dart';
+import 'icon_shapes.dart';
 
 /// How many choices a round shows. [level] starts at 1.
 ///
@@ -101,6 +102,25 @@ bool _isMaxSimilarity(double decoySimilarity) {
   return _clampSimilarity(decoySimilarity) >= _maxSimilarityThreshold;
 }
 
+/// When similarity is high, decoys should differ in rendered properties, not
+/// raw catalog field counts.
+bool _useVisualProximity(
+  double decoySimilarity,
+  bool levelBasedProximity,
+) {
+  return !levelBasedProximity && _clampSimilarity(decoySimilarity) >= 0.75;
+}
+
+/// Target [visualPropertyDelta] for a decoy at [decoySimilarity].
+int decoyVisualVariationCountForSimilarity(double decoySimilarity) {
+  final similarity = _clampSimilarity(decoySimilarity);
+  if (similarity >= _maxSimilarityThreshold) return 1;
+  if (similarity >= 0.75) return 1;
+  if (similarity >= 0.5) return 3;
+  if (similarity >= 0.25) return 6;
+  return 10;
+}
+
 /// How far [decoy] sits from [original].
 ///
 /// A changed body adds [bodyDecoyWeight], top [topDecoyWeight], side
@@ -147,11 +167,12 @@ class BuiltRound {
 /// The original is one of [BuiltRound.choices]. Choice count still follows
 /// [level]. Closeness does not, unless [levelBasedProximity] is true.
 ///
-/// With level-based proximity off (the default), each decoy is the original
-/// with [decoyVariationCountForSimilarity] fields replaced.
-/// [decoySimilarity] is 0..1: 0 keeps the wide 4-field baseline, and 1
-/// changes one field. A changed color stays within
-/// [maxMutationColorDistanceForSimilarity].
+/// With level-based proximity off (the default), [decoySimilarity] below 0.75
+/// uses [decoyVariationCountForSimilarity] catalog-field mutations. From 0.75
+/// up, decoys are catalog assemblies with a fixed [visualPropertyDelta] from
+/// the original (1 at 0.75 and 1.0). A changed color stays within
+/// [maxMutationColorDistanceForSimilarity] except for single-field color tweaks
+/// at high visual proximity.
 ///
 /// With level-based proximity on, [decoySimilarity] is ignored and the
 /// legacy level table ([decoyVariationCount], [maxMutationColorDistance])
@@ -170,15 +191,25 @@ BuiltRound buildRound({
   final colorCap = levelBasedProximity
       ? maxMutationColorDistance(level)
       : maxMutationColorDistanceForSimilarity(decoySimilarity);
-  final decoys = _mutateOriginal(
-    original,
-    level,
-    rng,
-    changes,
-    colorCap,
-    decoySimilarity: decoySimilarity,
-    levelBasedProximity: levelBasedProximity,
-  );
+  final decoys = _useVisualProximity(decoySimilarity, levelBasedProximity)
+      ? _mutateOriginalVisual(
+          original,
+          level,
+          rng,
+          decoyVisualVariationCountForSimilarity(decoySimilarity),
+          colorCap,
+          preferAdjacentColor:
+              !levelBasedProximity && _isMaxSimilarity(decoySimilarity),
+        )
+      : _mutateOriginal(
+          original,
+          level,
+          rng,
+          changes,
+          colorCap,
+          decoySimilarity: decoySimilarity,
+          levelBasedProximity: levelBasedProximity,
+        );
   final expected = choiceCountForLevel(level);
   if (decoys.length + 1 != expected) {
     throw StateError('Built ${decoys.length + 1} choices, expected $expected.');
@@ -218,6 +249,75 @@ Assembly _randomOriginal(Random rng) {
 }
 
 enum _Field { body, top, side, hole, color, pulse }
+
+List<Assembly> _mutateOriginalVisual(
+  Assembly original,
+  int level,
+  Random rng,
+  int visualDelta,
+  double colorCap, {
+  bool preferAdjacentColor = false,
+}) {
+  final pool = _visualMutations(original, visualDelta, colorCap);
+  pool.shuffle(rng);
+  pool.sort((a, b) {
+    final deltaA = visualPropertyDelta(original, a);
+    final deltaB = visualPropertyDelta(original, b);
+    if (deltaA != deltaB) return deltaA.compareTo(deltaB);
+    if (preferAdjacentColor) {
+      final colorA = _colorPickRank(original, a);
+      final colorB = _colorPickRank(original, b);
+      if (colorA != colorB) return colorA.compareTo(colorB);
+    }
+    return decoyDistance(original, a).compareTo(decoyDistance(original, b));
+  });
+  final count = choiceCountForLevel(level) - 1;
+  final picked = <Assembly>[];
+  final used = <Assembly>{original};
+  for (final candidate in pool) {
+    if (!used.add(candidate)) continue;
+    picked.add(candidate);
+    if (picked.length == count) return picked;
+  }
+  throw StateError(
+    'Only ${picked.length} visual mutations with delta $visualDelta for '
+    '$original at level $level.',
+  );
+}
+
+List<Assembly> _visualMutations(
+  Assembly original,
+  int visualDelta,
+  double colorCap,
+) {
+  final found = <Assembly>[];
+  for (final candidate in legalAssemblies()) {
+    if (candidate == original) continue;
+    if (visualPropertyDelta(original, candidate) != visualDelta) continue;
+    if (!_visualMutationColorAllowed(original, candidate, colorCap)) continue;
+    found.add(candidate);
+  }
+  return found;
+}
+
+bool _visualMutationColorAllowed(
+  Assembly original,
+  Assembly candidate,
+  double colorCap,
+) {
+  if (original.color == candidate.color) return true;
+  if (decoyFieldChanges(original, candidate) == 1) {
+    return true;
+  }
+  return colorDistance(original.color, candidate.color) <= colorCap;
+}
+
+/// Lower is closer. Ring neighbors beat distant palette colors.
+int _colorPickRank(Assembly original, Assembly candidate) {
+  if (original.color == candidate.color) return 0;
+  if (adjacentColors(original.color).contains(candidate.color)) return 1;
+  return 100 + colorDistance(original.color, candidate.color).round();
+}
 
 /// Legal mutations of [original] that change exactly [changes] fields.
 ///
