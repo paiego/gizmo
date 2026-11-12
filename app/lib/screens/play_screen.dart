@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 
+import '../account/local_score.dart';
 import '../game/session.dart';
 import '../theme.dart';
 import '../widgets/chance_marks.dart';
@@ -62,11 +63,22 @@ class PlayScreen extends StatefulWidget {
     required this.playerName,
     this.session,
     this.adminMode = false,
+    this.userId,
+    this.localOnly = false,
+    this.scores = const LocalScoreStore(),
   });
 
   final String playerName;
   final GameSession? session;
   final bool adminMode;
+
+  /// Firebase user id this run is allowed to score. Null on the online path
+  /// until the result screen submits to the server.
+  final String? userId;
+
+  /// Keep the score on the device for [userId]. Do not submit it.
+  final bool localOnly;
+  final LocalScoreStore scores;
 
   @override
   State<PlayScreen> createState() => _PlayScreenState();
@@ -223,6 +235,9 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
             playerName: widget.playerName,
             transcript: _session.transcript(widget.playerName),
             adminMode: widget.adminMode,
+            userId: widget.userId,
+            localOnly: widget.localOnly,
+            scores: widget.scores,
           ),
         ),
       );

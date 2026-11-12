@@ -2,13 +2,18 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gizmo/account/account_repository.dart';
+import 'package:gizmo/account/firebase_auth.dart';
+import 'package:gizmo/account/local_score.dart';
 import 'package:gizmo/api/gizmo_client.dart';
 import 'package:gizmo/game/session.dart';
 import 'package:gizmo/widgets/gizmo_button.dart';
 import 'package:gizmo/main.dart';
 import 'package:gizmo/name_store.dart';
+import 'package:gizmo/palette_store.dart';
 import 'package:gizmo/screens/icon_gallery_screen.dart';
 import 'package:gizmo/screens/play_screen.dart';
+import 'package:gizmo/screens/result_screen.dart';
 import 'package:gizmo/widgets/icon_shapes.dart';
 import 'package:gizmo/theme.dart';
 import 'package:gizmo/widgets/icon_view.dart';
@@ -66,7 +71,11 @@ void main() {
       GizmoApp(
         key: const ValueKey('reloaded'),
         client: _FakeClient(),
-        names: NameStore(),
+        accounts: AccountRepository(
+          names: NameStore(),
+          palettes: PaletteStore(),
+          requestUserId: () async => 'paul-id',
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -77,6 +86,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.tap(find.text('Play'));
+    await tester.pump();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
 
@@ -397,6 +407,113 @@ void main() {
     expect(find.byKey(const ValueKey('gallery-icon-99')), findsOneWidget);
   });
 
+  testWidgets('a first launch cannot play while offline', (tester) async {
+    SharedPreferences.setMockInitialValues({NameStore.storageKey: 'Paul'});
+    await tester.pumpWidget(
+      GizmoApp(
+        client: _FakeClient(),
+        accounts: AccountRepository(
+          names: NameStore(),
+          palettes: PaletteStore(),
+          requestUserId: () async => throw const SignInOffline(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Play'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Sign in to play.'), findsOneWidget);
+    expect(find.byType(PlayScreen), findsNothing);
+  });
+
+  testWidgets('offline play starts only for the saved account', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      NameStore.storageKey: 'Paul',
+      AccountRepository.firebaseIdKey: 'uid-a',
+    });
+    await tester.pumpWidget(
+      GizmoApp(
+        client: _FakeClient(),
+        accounts: AccountRepository(
+          names: NameStore(),
+          palettes: PaletteStore(),
+          requestUserId: () async => throw const SignInOffline(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Play'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(PlayScreen), findsOneWidget);
+    expect(find.text('Sign in to play.'), findsNothing);
+  });
+
+  testWidgets('an offline run stays on the device for that account', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final client = _FakeClient();
+    final scores = LocalScoreStore();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ResultScreen(
+          playerName: 'Paul',
+          userId: 'uid-a',
+          localOnly: true,
+          scores: scores,
+          client: client,
+          transcript: const SubmittedRun(
+            playerName: 'Paul',
+            score: 4,
+            rounds: [],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(client.submitCalls, 0);
+    expect(find.text('Saved on this device'), findsOneWidget);
+    expect(find.text('Best 4'), findsOneWidget);
+    expect(find.text('Rank 1'), findsNothing);
+    expect((await scores.read('uid-a'))!.best, 4);
+    expect(await scores.read('uid-b'), isNull);
+  });
+
+  testWidgets('home shows the saved score only for the signed-in account', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      NameStore.storageKey: 'Paul',
+      AccountRepository.firebaseIdKey: 'uid-a',
+      LocalScoreStore.bestKey('uid-a'): 9,
+      LocalScoreStore.runsKey('uid-a'): 2,
+      LocalScoreStore.bestKey('uid-b'): 40,
+    });
+    await tester.pumpWidget(
+      GizmoApp(
+        client: _DownClient(),
+        accounts: AccountRepository(
+          names: NameStore(),
+          palettes: PaletteStore(),
+          requestUserId: () async => throw const SignInOffline(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('9'), findsOneWidget);
+    expect(find.text('40'), findsNothing);
+    expect(find.text('Saved on this device'), findsOneWidget);
+    expect(find.text('The scoreboard is unreachable.'), findsNothing);
+  });
+
   test('a dealt round starts at level 1', () {
     final session = GameSession();
     final round = session.deal();
@@ -610,6 +727,7 @@ double _peakScale(WidgetTester tester) {
 
 class _FakeClient extends GizmoClient {
   int bestCalls = 0;
+  int submitCalls = 0;
 
   @override
   Future<PlayerSummary> fetchBest(String name) async {
@@ -619,6 +737,7 @@ class _FakeClient extends GizmoClient {
 
   @override
   Future<SavedRun> submitRun(SubmittedRun run) async {
+    submitCalls += 1;
     return SavedRun(
       runId: 'run',
       playerName: run.playerName,
@@ -632,5 +751,12 @@ class _FakeClient extends GizmoClient {
   @override
   Future<List<BoardEntry>> fetchLeaderboard({int limit = 20}) async {
     return const [];
+  }
+}
+
+class _DownClient extends _FakeClient {
+  @override
+  Future<PlayerSummary> fetchBest(String name) async {
+    throw GizmoClientException('unreachable');
   }
 }
