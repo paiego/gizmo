@@ -15,6 +15,7 @@ class AccountRepository {
     NameStore? names,
     PaletteStore? palettes,
     this.requestUserId = requestFirebaseUserId,
+    this.pingReachable = pingFirebaseReachable,
   })  : names = names ?? NameStore(),
         palettes = palettes ?? PaletteStore();
 
@@ -23,6 +24,9 @@ class AccountRepository {
 
   /// Google sign-in. Tests pass a stand-in; the app uses Firebase.
   final Future<String> Function() requestUserId;
+
+  /// Network check for cached sessions. Tests pass a stand-in.
+  final Future<void> Function() pingReachable;
 
   static const firebaseIdKey = 'account_firebase_id';
   static const adminKey = 'account_admin';
@@ -86,11 +90,23 @@ class AccountRepository {
 
   /// Decides whether a game may start.
   ///
-  /// A successful sign-in starts an online game as the id it returned.
-  /// An offline or network failure starts a game only when a user id is
-  /// already saved, and only as that id. The score then stays on the device.
-  /// A first launch with nothing saved still has to sign in.
+  /// When [current] already has a saved Firebase id, play starts without
+  /// opening the Google picker again until [signOut] clears it.
+  ///
+  /// Otherwise a successful sign-in starts an online game as the id it
+  /// returned. An offline or network failure starts a game only when a user
+  /// id is already saved, and only as that id. The score then stays on the
+  /// device. A first launch with nothing saved still has to sign in.
   Future<PlayTicket> preparePlay(GizmoAccount current) async {
+    if (current.signedIn) {
+      final id = current.firebaseId!;
+      try {
+        await pingReachable();
+        return PlayTicket(userId: id, localOnly: false, account: current);
+      } on SignInOffline {
+        return PlayTicket(userId: id, localOnly: true, account: current);
+      }
+    }
     try {
       final id = await requestUserId();
       if (id.isEmpty) {

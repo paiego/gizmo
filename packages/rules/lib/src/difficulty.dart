@@ -80,9 +80,9 @@ int decoyVariationCountForSimilarity(double decoySimilarity) {
 
 /// Largest RGB distance when a similarity mutation changes color.
 ///
-/// 0 allows any other catalog color. 1 allows about 60 RGB, the nearest
-/// pairs. In between, the cap falls linearly from 320 to 60. Level does
-/// not enter this.
+/// 0 allows any other catalog color. Values near 1 use ring neighbors only;
+/// just below that, about 60 RGB. In between, the cap falls linearly from
+/// 320 to 60. Level does not enter this.
 double maxMutationColorDistanceForSimilarity(double decoySimilarity) {
   final similarity = _clampSimilarity(decoySimilarity);
   if (similarity <= 0) return double.infinity;
@@ -92,6 +92,13 @@ double maxMutationColorDistanceForSimilarity(double decoySimilarity) {
 double _clampSimilarity(double decoySimilarity) {
   if (decoySimilarity.isNaN) return 0;
   return decoySimilarity.clamp(0.0, 1.0);
+}
+
+/// Slider values near 1.0 may sit slightly below one because of floats.
+const double _maxSimilarityThreshold = 0.999;
+
+bool _isMaxSimilarity(double decoySimilarity) {
+  return _clampSimilarity(decoySimilarity) >= _maxSimilarityThreshold;
 }
 
 /// How far [decoy] sits from [original].
@@ -163,7 +170,15 @@ BuiltRound buildRound({
   final colorCap = levelBasedProximity
       ? maxMutationColorDistance(level)
       : maxMutationColorDistanceForSimilarity(decoySimilarity);
-  final decoys = _mutateOriginal(original, level, rng, changes, colorCap);
+  final decoys = _mutateOriginal(
+    original,
+    level,
+    rng,
+    changes,
+    colorCap,
+    decoySimilarity: decoySimilarity,
+    levelBasedProximity: levelBasedProximity,
+  );
   final expected = choiceCountForLevel(level);
   if (decoys.length + 1 != expected) {
     throw StateError('Built ${decoys.length + 1} choices, expected $expected.');
@@ -213,9 +228,23 @@ List<Assembly> _mutateOriginal(
   int level,
   Random rng,
   int changes,
-  double colorCap,
-) {
-  final pool = _mutations(original, changes, colorCap)..shuffle(rng);
+  double colorCap, {
+  double decoySimilarity = 0,
+  bool levelBasedProximity = false,
+}) {
+  final tightColor = !levelBasedProximity && _isMaxSimilarity(decoySimilarity);
+  final pool = _mutations(
+    original,
+    changes,
+    colorCap,
+    tightColor: tightColor,
+  );
+  if (!levelBasedProximity &&
+      _clampSimilarity(decoySimilarity) >= 0.75) {
+    _sortMutationsByProximity(original, pool, rng);
+  } else {
+    pool.shuffle(rng);
+  }
   final count = choiceCountForLevel(level) - 1;
   final picked = <Assembly>[];
   final used = <Assembly>{original};
@@ -230,11 +259,28 @@ List<Assembly> _mutateOriginal(
   );
 }
 
-List<Assembly> _mutations(Assembly original, int changes, double colorCap) {
+void _sortMutationsByProximity(
+  Assembly original,
+  List<Assembly> pool,
+  Random rng,
+) {
+  pool.shuffle(rng);
+  pool.sort(
+    (a, b) => decoyDistance(original, a).compareTo(decoyDistance(original, b)),
+  );
+}
+
+List<Assembly> _mutations(
+  Assembly original,
+  int changes,
+  double colorCap, {
+  bool tightColor = false,
+}) {
   final found = <Assembly>[];
   for (final combo in _combinations(changes)) {
     final options = [
-      for (final field in combo) _alternatives(original, field, colorCap),
+      for (final field in combo)
+        _alternatives(original, field, colorCap, tightColor: tightColor),
     ];
     if (options.any((values) => values.isEmpty)) continue;
     void walk(int index, Map<_Field, Object> picked) {
@@ -274,7 +320,12 @@ List<List<_Field>> _combinations(int count) {
   return out;
 }
 
-List<Object> _alternatives(Assembly original, _Field field, double colorCap) {
+List<Object> _alternatives(
+  Assembly original,
+  _Field field,
+  double colorCap, {
+  bool tightColor = false,
+}) {
   switch (field) {
     case _Field.body:
       return [
@@ -302,6 +353,12 @@ List<Object> _alternatives(Assembly original, _Field field, double colorCap) {
           if (value != original.pulse) value
       ];
     case _Field.color:
+      if (tightColor) {
+        return [
+          for (final value in adjacentColors(original.color))
+            if (value != original.color) value,
+        ];
+      }
       return [
         for (final value in ColorId.values)
           if (value != original.color &&
