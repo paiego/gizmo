@@ -64,6 +64,21 @@ bool firebaseIsReady() {
   }
 }
 
+/// Checks whether Firebase Auth can be reached without opening sign-in UI.
+Future<void> pingFirebaseReachable() async {
+  if (!firebaseIsReady()) return;
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+  try {
+    await user.getIdToken();
+  } on SignInOffline {
+    rethrow;
+  } catch (error) {
+    if (isOfflineSignInFailure(error)) throw SignInOffline(error);
+    rethrow;
+  }
+}
+
 var _googleReady = false;
 
 Future<GoogleSignIn> _google() async {

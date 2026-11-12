@@ -416,6 +416,7 @@ void main() {
           names: NameStore(),
           palettes: PaletteStore(),
           requestUserId: () async => throw const SignInOffline(),
+          pingReachable: () async => throw const SignInOffline(),
         ),
       ),
     );
@@ -441,6 +442,7 @@ void main() {
           names: NameStore(),
           palettes: PaletteStore(),
           requestUserId: () async => throw const SignInOffline(),
+          pingReachable: () async => throw const SignInOffline(),
         ),
       ),
     );
@@ -503,6 +505,7 @@ void main() {
           names: NameStore(),
           palettes: PaletteStore(),
           requestUserId: () async => throw const SignInOffline(),
+          pingReachable: () async => throw const SignInOffline(),
         ),
       ),
     );

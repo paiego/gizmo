@@ -99,10 +99,12 @@ void main() {
       AccountRepository.firebaseIdKey: 'uid-a',
       NameStore.storageKey: 'Paul',
     });
+    Future<void> offline() async => throw const SignInOffline();
     final repository = AccountRepository(
       names: NameStore(),
       palettes: PaletteStore(),
       requestUserId: () async => throw const SignInOffline(),
+      pingReachable: offline,
     );
 
     final ticket = await repository.preparePlay(await repository.read());
@@ -139,10 +141,12 @@ void main() {
 
   test('a first launch with nothing cached cannot play offline', () async {
     SharedPreferences.setMockInitialValues({});
+    Future<void> offline() async => throw const SignInOffline();
     final repository = AccountRepository(
       names: NameStore(),
       palettes: PaletteStore(),
       requestUserId: () async => throw const SignInOffline(),
+      pingReachable: offline,
     );
 
     await expectLater(
@@ -158,10 +162,12 @@ void main() {
       AccountRepository.firebaseIdKey: 'uid-a',
       NameStore.storageKey: 'Paul',
     });
+    Future<void> offline() async => throw const SignInOffline();
     final repository = AccountRepository(
       names: NameStore(),
       palettes: PaletteStore(),
       requestUserId: () async => throw const SignInOffline(),
+      pingReachable: offline,
     );
     await LocalScoreStore().record('uid-a', 4);
     final signedOut = await repository.signOut(await repository.read());
@@ -174,28 +180,49 @@ void main() {
     expect((await LocalScoreStore().read('uid-a'))!.best, 4);
   });
 
-  test('a different account plays only when sign-in returns their id',
+  test('preparePlay reuses the cached user id without calling sign-in',
       () async {
     SharedPreferences.setMockInitialValues({
       AccountRepository.firebaseIdKey: 'uid-a',
     });
     await LocalScoreStore().record('uid-a', 4);
+    var signInCalls = 0;
+    final repository = AccountRepository(
+      names: NameStore(),
+      palettes: PaletteStore(),
+      requestUserId: () async {
+        signInCalls++;
+        return 'uid-b';
+      },
+    );
+
+    final ticket = await repository.preparePlay(await repository.read());
+
+    expect(signInCalls, 0);
+    expect(ticket.localOnly, isFalse);
+    expect(ticket.userId, 'uid-a');
+    expect((await repository.read()).firebaseId, 'uid-a');
+    expect((await LocalScoreStore().read('uid-a'))!.best, 4);
+    expect(await LocalScoreStore().read('uid-b'), isNull);
+  });
+
+  test('profile sign-in can replace the cached Firebase id', () async {
+    SharedPreferences.setMockInitialValues({
+      AccountRepository.firebaseIdKey: 'uid-a',
+    });
     final repository = AccountRepository(
       names: NameStore(),
       palettes: PaletteStore(),
       requestUserId: () async => 'uid-b',
     );
 
-    final ticket = await repository.preparePlay(await repository.read());
+    final next = await repository.signIn(await repository.read());
 
-    expect(ticket.localOnly, isFalse);
-    expect(ticket.userId, 'uid-b');
+    expect(next.firebaseId, 'uid-b');
     expect((await repository.read()).firebaseId, 'uid-b');
-    expect((await LocalScoreStore().read('uid-a'))!.best, 4);
-    expect(await LocalScoreStore().read('uid-b'), isNull);
   });
 
-  test('canceling sign-in does not start an offline game', () async {
+  test('a cached account can still play when sign-in would be canceled', () async {
     SharedPreferences.setMockInitialValues({
       AccountRepository.firebaseIdKey: 'uid-a',
     });
@@ -205,10 +232,10 @@ void main() {
       requestUserId: () async => throw const GoogleSignInCanceled(),
     );
 
-    await expectLater(
-      repository.preparePlay(await repository.read()),
-      throwsA(isA<GoogleSignInCanceled>()),
-    );
+    final ticket = await repository.preparePlay(await repository.read());
+
+    expect(ticket.userId, 'uid-a');
+    expect(ticket.localOnly, isFalse);
     expect((await repository.read()).firebaseId, 'uid-a');
   });
 }
