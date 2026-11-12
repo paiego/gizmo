@@ -145,114 +145,101 @@ void main() {
     expect(positions.length, greaterThan(1));
   });
 
-  test('the closeness cap tightens on the choice-count bands', () {
-    expect(maxDecoyDistance(1), 32);
-    expect(maxDecoyDistance(3), maxDecoyDistance(1));
-    expect(maxDecoyDistance(4), 22);
-    expect(maxDecoyDistance(6), maxDecoyDistance(4));
-    expect(maxDecoyDistance(7), 14);
-    expect(maxDecoyDistance(10), maxDecoyDistance(7));
-    expect(maxDecoyDistance(11), 9);
-    expect(maxDecoyDistance(14), maxDecoyDistance(11));
-    expect(maxDecoyDistance(15), 5);
-    expect(maxDecoyDistance(18), maxDecoyDistance(15));
-    expect(maxDecoyDistance(19), 3.25);
-    expect(maxDecoyDistance(41), maxDecoyDistance(19));
-    expect(maxDecoyDistance(1), greaterThan(maxDecoyDistance(6)));
-    expect(maxDecoyDistance(6), greaterThan(maxDecoyDistance(10)));
-    expect(maxDecoyDistance(10), greaterThan(maxDecoyDistance(14)));
-    expect(maxDecoyDistance(14), greaterThan(maxDecoyDistance(18)));
-    expect(maxDecoyDistance(18), greaterThan(maxDecoyDistance(19)));
+  test('mutation count and color cap tighten with level', () {
+    expect(decoyVariationCount(1), 4);
+    expect(decoyVariationCount(3), 4);
+    expect(decoyVariationCount(4), 3);
+    expect(decoyVariationCount(6), 3);
+    expect(decoyVariationCount(7), 2);
+    expect(decoyVariationCount(10), 2);
+    expect(decoyVariationCount(11), 1);
+    expect(decoyVariationCount(18), 1);
+    expect(decoyVariationCount(19), 1);
+    expect(decoyVariationCount(41), 1);
+    expect(decoyVariationCount(1), greaterThan(decoyVariationCount(6)));
+    expect(decoyVariationCount(6), greaterThan(decoyVariationCount(10)));
+    expect(decoyVariationCount(10), greaterThan(decoyVariationCount(19)));
+    expect(maxMutationColorDistance(1), double.infinity);
+    expect(maxMutationColorDistance(6), double.infinity);
+    expect(maxMutationColorDistance(7), 220);
+    expect(maxMutationColorDistance(11), 160);
+    expect(maxMutationColorDistance(15), 110);
+    expect(maxMutationColorDistance(19), 60);
     expect(
-      holeDecoyWeight + pulseDecoyWeight,
-      greaterThan(maxDecoyDistance(19)),
+      maxMutationColorDistance(7),
+      greaterThan(maxMutationColorDistance(19)),
     );
-    expect(bodyDecoyWeight, greaterThan(maxDecoyDistance(19)));
   });
 
-  test('every decoy stays inside its level cap', () {
+  test('each decoy is the original with that level\'s field changes', () {
     for (final level in [1, 3, 4, 6, 7, 10, 11, 14, 15, 18, 19, 41]) {
+      final changes = decoyVariationCount(level);
+      final colorCap = maxMutationColorDistance(level);
       for (var seed = 0; seed < 20; seed++) {
         final round = buildRound(level: level, random: Random(seed));
         expectRoundShape(round, level);
         for (final decoy in decoysOf(round)) {
-          expect(
-            decoyDistance(round.original, decoy),
-            lessThanOrEqualTo(maxDecoyDistance(level)),
-          );
+          expect(decoyFieldChanges(round.original, decoy), changes);
+          expect(_unchangedFields(round.original, decoy), 6 - changes);
+          if (decoy.color != round.original.color) {
+            expect(
+              colorDistance(round.original.color, decoy.color),
+              lessThanOrEqualTo(colorCap),
+            );
+          }
         }
       }
     }
   });
 
-  test('late decoys sit closer than early ones', () {
-    final means = <int, double>{};
-    for (final level in [1, 6, 10, 14, 18, 19]) {
-      var total = 0.0;
-      var count = 0;
-      for (var seed = 0; seed < 24; seed++) {
-        final round = buildRound(level: level, random: Random(seed));
-        for (final decoy in decoysOf(round)) {
-          total += decoyDistance(round.original, decoy);
-          count += 1;
-        }
-      }
-      means[level] = total / count;
-    }
-    expect(means[1]!, greaterThan(means[6]!));
-    expect(means[6]!, greaterThan(means[10]!));
-    expect(means[10]!, greaterThan(means[14]!));
-    expect(means[14]!, greaterThan(means[18]!));
-    expect(means[18]!, greaterThan(means[19]!));
-    expect(means[1]!, greaterThan(means[19]! * 4));
-  });
-
-  test('level 1 changes every field and level 19 changes one nearby field', () {
-    var earlyColor = 0.0;
-    var earlyColorCount = 0;
-    var lateColor = 0.0;
-    var lateColorCount = 0;
+  test('early decoys change more fields and sit farther than late ones', () {
+    var early = 0.0;
+    var mid = 0.0;
+    var late = 0.0;
+    var earlyCount = 0;
+    var midCount = 0;
+    var lateCount = 0;
     var earlyMin = double.infinity;
     var lateMax = 0.0;
-    for (var seed = 0; seed < 30; seed++) {
-      final early = buildRound(level: 1, random: Random(seed));
-      final late = buildRound(level: 41, random: Random(seed + 1000));
-      for (final decoy in decoysOf(early)) {
-        final distance = decoyDistance(early.original, decoy);
+    for (var seed = 0; seed < 24; seed++) {
+      final first = buildRound(level: 1, random: Random(seed));
+      final tenth = buildRound(level: 10, random: Random(seed));
+      final last = buildRound(level: 19, random: Random(seed + 100));
+      for (final decoy in decoysOf(first)) {
+        final distance = decoyDistance(first.original, decoy);
+        early += distance;
+        earlyCount += 1;
         earlyMin = min(earlyMin, distance);
-        expect(decoyFieldChanges(early.original, decoy), 6);
-        expect(decoy.body, isNot(early.original.body));
-        expect(
-          decoy.top != early.original.top || decoy.side != early.original.side,
-          isTrue,
-        );
-        final colorGap = colorDistance(early.original.color, decoy.color);
-        expect(colorGap, greaterThanOrEqualTo(minDecoyColorDistance));
-        earlyColor += colorGap;
-        earlyColorCount += 1;
+        expect(decoyFieldChanges(first.original, decoy), 4);
       }
-      for (final decoy in decoysOf(late)) {
-        final distance = decoyDistance(late.original, decoy);
+      for (final decoy in decoysOf(tenth)) {
+        mid += decoyDistance(tenth.original, decoy);
+        midCount += 1;
+        expect(decoyFieldChanges(tenth.original, decoy), 2);
+      }
+      for (final decoy in decoysOf(last)) {
+        final distance = decoyDistance(last.original, decoy);
+        late += distance;
+        lateCount += 1;
         lateMax = max(lateMax, distance);
-        expect(decoyFieldChanges(late.original, decoy), 1);
-        expect(decoy.body, late.original.body);
-        if (decoy.color != late.original.color) {
-          final colorGap = colorDistance(late.original.color, decoy.color);
-          expect(colorGap, lessThan(minDecoyColorDistance));
-          lateColor += colorGap;
-          lateColorCount += 1;
-        }
+        expect(decoyFieldChanges(last.original, decoy), 1);
       }
     }
     expect(earlyMin, greaterThan(lateMax));
-    expect(earlyColorCount, greaterThan(0));
-    if (lateColorCount > 0) {
-      expect(
-        earlyColor / earlyColorCount,
-        greaterThan(lateColor / lateColorCount),
-      );
-    }
+    expect(early / earlyCount, greaterThan(mid / midCount));
+    expect(mid / midCount, greaterThan(late / lateCount));
   });
+}
+
+int _unchangedFields(Assembly original, Assembly decoy) {
+  var count = 0;
+  if (original.body == decoy.body) count += 1;
+  if (original.top == decoy.top) count += 1;
+  if (original.side == decoy.side) count += 1;
+  if (original.hole == decoy.hole) count += 1;
+  if (original.color == decoy.color) count += 1;
+  if (original.pulse == decoy.pulse) count += 1;
+  return count;
 }
 
 List<Assembly> decoysOf(BuiltRound round) => [
