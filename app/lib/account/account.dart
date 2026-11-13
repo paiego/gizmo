@@ -11,6 +11,8 @@ class GizmoAccount {
     this.pictureId = defaultPictureId,
     this.themeId = 'warm',
     this.decoySimilarity = 0,
+    this.decoySimilarityMax = 1,
+    this.decoySimilarityRampSlope = 0.5,
     this.levelBasedProximity = false,
   });
 
@@ -26,11 +28,17 @@ class GizmoAccount {
   final String pictureId;
   final String themeId;
 
-  /// How alike decoys should be, from 0 (wider) to 1 (one field).
+  /// Start decoy similarity (0 wider, 1 tightest) for level 1 or fixed play.
   final double decoySimilarity;
 
-  /// When true, higher levels use closer decoys and [decoySimilarity] is
-  /// ignored. When false, only [decoySimilarity] sets closeness.
+  /// Target similarity at high levels when [levelBasedProximity] is on.
+  final double decoySimilarityMax;
+
+  /// Ramp steepness 0..1 when level-based proximity is on (1 = instant max).
+  final double decoySimilarityRampSlope;
+
+  /// When true, similarity ramps from [decoySimilarity] to [decoySimilarityMax]
+  /// by level. When false, only [decoySimilarity] applies.
   final bool levelBasedProximity;
 
   bool get signedIn => firebaseId != null && firebaseId!.isNotEmpty;
@@ -47,6 +55,8 @@ class GizmoAccount {
     String? pictureId,
     String? themeId,
     double? decoySimilarity,
+    double? decoySimilarityMax,
+    double? decoySimilarityRampSlope,
     bool? levelBasedProximity,
   }) {
     return GizmoAccount(
@@ -57,6 +67,9 @@ class GizmoAccount {
       pictureId: pictureId ?? this.pictureId,
       themeId: themeId ?? this.themeId,
       decoySimilarity: decoySimilarity ?? this.decoySimilarity,
+      decoySimilarityMax: decoySimilarityMax ?? this.decoySimilarityMax,
+      decoySimilarityRampSlope:
+          decoySimilarityRampSlope ?? this.decoySimilarityRampSlope,
       levelBasedProximity: levelBasedProximity ?? this.levelBasedProximity,
     );
   }

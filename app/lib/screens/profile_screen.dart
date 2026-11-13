@@ -25,6 +25,12 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
+String _rampSlopeLabel(double slope) {
+  if (slope >= 0.999) return 'Instant max';
+  if (slope <= 0) return 'Flat (start only)';
+  return slope.toStringAsFixed(2);
+}
+
 class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _username;
   late GizmoAccount _account;
@@ -174,12 +180,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Text('Decoy similarity', style: TextStyle(color: look.ink)),
             const SizedBox(height: 4),
             Text(
-              '1 means decoys are more like the original. '
-              '${_account.decoySimilarity.toStringAsFixed(2)}',
+              '1 means decoys are more like the original.',
               style: TextStyle(color: look.muted),
             ),
+            const SizedBox(height: 8),
+            Text('Start similarity', style: TextStyle(color: look.muted)),
+            Text(
+              _account.decoySimilarity.toStringAsFixed(2),
+              style: TextStyle(color: look.ink),
+            ),
             Slider(
-              key: const ValueKey('decoy-similarity'),
+              key: const ValueKey('decoy-similarity-start'),
               value: _account.decoySimilarity.clamp(0.0, 1.0).toDouble(),
               min: 0,
               max: 1,
@@ -187,12 +198,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onChanged: (value) =>
                   _apply(_account.copyWith(decoySimilarity: value)),
             ),
+            Text('Max similarity', style: TextStyle(color: look.muted)),
+            Text(
+              _account.decoySimilarityMax.toStringAsFixed(2),
+              style: TextStyle(
+                color: _account.levelBasedProximity ? look.ink : look.muted,
+              ),
+            ),
+            Slider(
+              key: const ValueKey('decoy-similarity-max'),
+              value: _account.decoySimilarityMax.clamp(0.0, 1.0).toDouble(),
+              min: 0,
+              max: 1,
+              activeColor: look.ink,
+              onChanged: _account.levelBasedProximity
+                  ? (value) =>
+                      _apply(_account.copyWith(decoySimilarityMax: value))
+                  : null,
+            ),
+            Text('Ramp slope', style: TextStyle(color: look.muted)),
+            Text(
+              _rampSlopeLabel(_account.decoySimilarityRampSlope),
+              style: TextStyle(
+                color: _account.levelBasedProximity ? look.ink : look.muted,
+              ),
+            ),
+            Slider(
+              key: const ValueKey('decoy-similarity-ramp-slope'),
+              value:
+                  _account.decoySimilarityRampSlope.clamp(0.0, 1.0).toDouble(),
+              min: 0,
+              max: 1,
+              activeColor: look.ink,
+              onChanged: _account.levelBasedProximity
+                  ? (value) =>
+                      _apply(_account.copyWith(decoySimilarityRampSlope: value))
+                  : null,
+            ),
             SwitchListTile(
               key: const ValueKey('level-based-proximity'),
               contentPadding: EdgeInsets.zero,
               title: const Text('Level-based proximity'),
               subtitle: Text(
-                'Off uses only decoy similarity. On makes higher levels closer.',
+                'Off uses only start similarity. On ramps start → max by level.',
                 style: TextStyle(color: look.muted),
               ),
               value: _account.levelBasedProximity,

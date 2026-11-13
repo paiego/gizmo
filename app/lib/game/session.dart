@@ -24,6 +24,8 @@ class GameSession {
     Random? random,
     this.adminMode = false,
     this.decoySimilarity = 0,
+    this.decoySimilarityMax = 1,
+    this.decoySimilarityRampSlope = 0.5,
     this.levelBasedProximity = false,
   }) : _random = random ?? Random();
 
@@ -32,8 +34,10 @@ class GameSession {
   /// Misses do not end the run.
   final bool adminMode;
 
-  /// 0 is the wide decoy baseline. 1 changes one catalog field.
+  /// Start similarity; see [levelBasedProximity].
   final double decoySimilarity;
+  final double decoySimilarityMax;
+  final double decoySimilarityRampSlope;
 
   /// When false, [decoySimilarity] alone sets how close decoys are.
   final bool levelBasedProximity;
@@ -52,6 +56,8 @@ class GameSession {
         level: level,
         random: _random,
         decoySimilarity: decoySimilarity,
+        decoySimilarityMax: decoySimilarityMax,
+        decoySimilarityRampSlope: decoySimilarityRampSlope,
         levelBasedProximity: levelBasedProximity,
       );
       if (_decoysDiffer(round)) return round;

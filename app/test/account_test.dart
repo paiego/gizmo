@@ -35,6 +35,8 @@ void main() {
         themeId: 'cold',
         admin: true,
         decoySimilarity: 0.75,
+        decoySimilarityMax: 0.9,
+        decoySimilarityRampSlope: 0.25,
         levelBasedProximity: true,
       ),
     );
@@ -44,6 +46,8 @@ void main() {
     expect(loaded.themeId, 'cold');
     expect(loaded.admin, isTrue);
     expect(loaded.decoySimilarity, 0.75);
+    expect(loaded.decoySimilarityMax, 0.9);
+    expect(loaded.decoySimilarityRampSlope, 0.25);
     expect(loaded.levelBasedProximity, isTrue);
     expect(loaded.firebaseId, isNull);
     expect(loaded.signedIn, isFalse);
