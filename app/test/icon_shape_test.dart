@@ -167,7 +167,7 @@ void main() {
 
   test('different assemblies share the same on-screen ink reach', () {
     const side = 200.0;
-    final reach = side / 2 - 1;
+    final reach = (side / 2 - 1) * inkReachFactor;
     Assembly? smallest;
     Assembly? largest;
     var minInk = double.infinity;
