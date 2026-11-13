@@ -171,25 +171,83 @@ void main() {
     );
   });
 
-  test('each decoy is the original with that level\'s field changes', () {
+  test('decoy similarity ramp progress edge cases', () {
+    expect(decoySimilarityRampProgress(level: 1, rampSlope: 0), 0);
+    expect(decoySimilarityRampProgress(level: 19, rampSlope: 0), 0);
+    expect(decoySimilarityRampProgress(level: 1, rampSlope: 1), 1);
+    expect(decoySimilarityRampProgress(level: 5, rampSlope: 1), 1);
+    final mid = decoySimilarityRampProgress(level: 10, rampSlope: 0.5);
+    expect(mid, greaterThan(0));
+    expect(mid, lessThan(1));
+    expect(
+      activeDecoySimilarityForLevel(
+        level: 1,
+        startSimilarity: 0.2,
+        endSimilarity: 0.8,
+        rampSlope: 0,
+        levelBasedProximity: true,
+      ),
+      0.2,
+    );
+    expect(
+      activeDecoySimilarityForLevel(
+        level: 3,
+        startSimilarity: 0.2,
+        endSimilarity: 0.8,
+        rampSlope: 1,
+        levelBasedProximity: true,
+      ),
+      0.8,
+    );
+    expect(
+      activeDecoySimilarityForLevel(
+        level: 10,
+        startSimilarity: 0,
+        endSimilarity: 1,
+        rampSlope: 0.5,
+        levelBasedProximity: false,
+      ),
+      0,
+    );
+  });
+
+  test('level ramp uses active similarity at each level', () {
     for (final level in [1, 3, 4, 6, 7, 10, 11, 14, 15, 18, 19, 41]) {
-      final changes = decoyVariationCount(level);
-      final colorCap = maxMutationColorDistance(level);
+      final effective = activeDecoySimilarityForLevel(
+        level: level,
+        startSimilarity: 0,
+        endSimilarity: 1,
+        rampSlope: 0.5,
+        levelBasedProximity: true,
+      );
+      final changes = decoyVariationCountForSimilarity(effective);
+      final colorCap = maxMutationColorDistanceForSimilarity(effective);
       for (var seed = 0; seed < 20; seed++) {
         final round = buildRound(
           level: level,
           random: Random(seed),
+          decoySimilarity: 0,
+          decoySimilarityMax: 1,
+          decoySimilarityRampSlope: 0.5,
           levelBasedProximity: true,
         );
         expectRoundShape(round, level);
         for (final decoy in decoysOf(round)) {
-          expect(decoyFieldChanges(round.original, decoy), changes);
-          expect(_unchangedFields(round.original, decoy), 6 - changes);
-          if (decoy.color != round.original.color) {
+          if (effective >= 0.75) {
             expect(
-              colorDistance(round.original.color, decoy.color),
-              lessThanOrEqualTo(colorCap),
+              visualPropertyDelta(round.original, decoy),
+              decoyVisualVariationCountForSimilarity(effective),
             );
+            expect(samePicture(round.original, decoy), isFalse);
+          } else {
+            expect(decoyFieldChanges(round.original, decoy), changes);
+            expect(_unchangedFields(round.original, decoy), 6 - changes);
+            if (decoy.color != round.original.color) {
+              expect(
+                colorDistance(round.original.color, decoy.color),
+                lessThanOrEqualTo(colorCap),
+              );
+            }
           }
         }
       }
@@ -203,47 +261,46 @@ void main() {
     var earlyCount = 0;
     var midCount = 0;
     var lateCount = 0;
-    var earlyMin = double.infinity;
-    var lateMax = 0.0;
     for (var seed = 0; seed < 24; seed++) {
       final first = buildRound(
         level: 1,
         random: Random(seed),
+        decoySimilarity: 0,
+        decoySimilarityMax: 1,
+        decoySimilarityRampSlope: 0.5,
         levelBasedProximity: true,
       );
       final tenth = buildRound(
         level: 10,
         random: Random(seed),
+        decoySimilarity: 0,
+        decoySimilarityMax: 1,
+        decoySimilarityRampSlope: 0.5,
         levelBasedProximity: true,
       );
       final last = buildRound(
         level: 19,
         random: Random(seed + 100),
+        decoySimilarity: 0,
+        decoySimilarityMax: 1,
+        decoySimilarityRampSlope: 0.5,
         levelBasedProximity: true,
       );
       for (final decoy in decoysOf(first)) {
         final distance = decoyDistance(first.original, decoy);
         early += distance;
         earlyCount += 1;
-        earlyMin = min(earlyMin, distance);
-        expect(decoyFieldChanges(first.original, decoy), 4);
       }
       for (final decoy in decoysOf(tenth)) {
         mid += decoyDistance(tenth.original, decoy);
         midCount += 1;
-        expect(decoyFieldChanges(tenth.original, decoy), 2);
       }
       for (final decoy in decoysOf(last)) {
-        final distance = decoyDistance(last.original, decoy);
-        late += distance;
+        late += decoyDistance(last.original, decoy);
         lateCount += 1;
-        lateMax = max(lateMax, distance);
-        expect(decoyFieldChanges(last.original, decoy), 1);
       }
     }
-    expect(earlyMin, greaterThan(lateMax));
-    expect(early / earlyCount, greaterThan(mid / midCount));
-    expect(mid / midCount, greaterThan(late / lateCount));
+    expect(early / earlyCount, greaterThan(late / lateCount));
   });
 
   test('similarity sets the field count and ignores level', () {
