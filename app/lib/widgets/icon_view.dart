@@ -6,6 +6,9 @@ import 'icon_shapes.dart';
 
 /// Paints one assembly as three shapes, one pixel inside the cell.
 ///
+/// When [appearance] is set, those frozen layers paint instead of materializing
+/// [assembly] from the catalog seed.
+///
 /// [palette] wins when set. Otherwise the surrounding [PaletteScope] is used,
 /// and a missing scope paints [warmPalette].
 ///
@@ -15,10 +18,12 @@ class IconView extends StatelessWidget {
     super.key,
     required this.assembly,
     required this.size,
+    this.appearance,
     this.palette,
   });
 
   final Assembly assembly;
+  final IconSnapshot? appearance;
   final double size;
   final IconPalette? palette;
 
@@ -29,7 +34,11 @@ class IconView extends StatelessWidget {
       width: size,
       height: size,
       child: CustomPaint(
-        painter: IconPainter(assembly, colors),
+        painter: IconPainter(
+          assembly,
+          colors,
+          appearance: appearance,
+        ),
         size: Size.square(size),
       ),
     );
@@ -40,10 +49,12 @@ class IconPainter extends CustomPainter {
   const IconPainter(
     this.assembly,
     this.palette, {
+    this.appearance,
     this.phase = 0,
   });
 
   final Assembly assembly;
+  final IconSnapshot? appearance;
   final IconPalette palette;
 
   /// Held at 0 while pulses stay still.
@@ -62,7 +73,8 @@ class IconPainter extends CustomPainter {
     canvas.translate(side / 2, side / 2);
     canvas.scale(scale);
     canvas.translate(-iconCenter.dx, -iconCenter.dy);
-    for (final shape in iconShapes(assembly)) {
+    final layers = appearance?.layers ?? materializeIcon(assembly).layers;
+    for (final shape in layers) {
       canvas.drawPath(shapePath(shape), _paint(shape, scale));
     }
     canvas.restore();
@@ -88,6 +100,7 @@ class IconPainter extends CustomPainter {
   @override
   bool shouldRepaint(IconPainter oldDelegate) =>
       oldDelegate.assembly != assembly ||
+      oldDelegate.appearance != appearance ||
       oldDelegate.palette != palette ||
       oldDelegate.phase != phase;
 }

@@ -72,6 +72,26 @@ class IconShape {
   final double thickness;
   final int points;
 
+  IconShape copyWith({
+    IconShapeKind? kind,
+    double? radius,
+    double? rotation,
+    ColorId? color,
+    IconPaint? paint,
+    double? thickness,
+    int? points,
+  }) {
+    return IconShape(
+      kind: kind ?? this.kind,
+      radius: radius ?? this.radius,
+      rotation: rotation ?? this.rotation,
+      color: color ?? this.color,
+      paint: paint ?? this.paint,
+      thickness: thickness ?? this.thickness,
+      points: points ?? this.points,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       other is IconShape &&
@@ -95,26 +115,76 @@ class IconShape {
       );
 }
 
-/// The three shapes that paint [assembly], larger one first.
-List<IconShape> iconShapes(Assembly assembly) {
-  return [
+/// Frozen painted icon: three layers, back to front.
+class IconSnapshot {
+  const IconSnapshot(this.layers) : assert(layers.length == 3);
+
+  final List<IconShape> layers;
+
+  @override
+  bool operator ==(Object other) =>
+      other is IconSnapshot &&
+      _layersEqual(layers, other.layers);
+
+  @override
+  int get hashCode => Object.hashAll(layers);
+
+  IconSnapshot copyLayer(
+    int index,
+    IconShape Function(IconShape layer) update,
+  ) {
+    final copy = List<IconShape>.from(layers);
+    copy[index] = update(copy[index]);
+    return IconSnapshot(copy);
+  }
+}
+
+bool _layersEqual(List<IconShape> a, List<IconShape> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+/// Which single visual property may differ at similarity 1.0.
+enum SingleVisualDiffKind {
+  layer0Color,
+  layer1Color,
+  layer1Kind,
+  layer2Color,
+  layer2Kind,
+}
+
+/// All [SingleVisualDiffKind] values in display order.
+const List<SingleVisualDiffKind> singleVisualDiffKinds = [
+  SingleVisualDiffKind.layer0Color,
+  SingleVisualDiffKind.layer1Color,
+  SingleVisualDiffKind.layer1Kind,
+  SingleVisualDiffKind.layer2Color,
+  SingleVisualDiffKind.layer2Kind,
+];
+
+/// Materializes three layers from [assembly]. Seed runs only here.
+IconSnapshot materializeIcon(Assembly assembly) {
+  return IconSnapshot([
     _shape(assembly, 0, 20, 27, 3.5, 6.5),
     _shape(assembly, 1, 10, 16, 2.0, 4.0),
     _shape(assembly, 2, 9.93, 9.97, 1.2, 2.4),
-  ];
+  ]);
 }
 
-/// How many rendered shape properties differ between [a] and [b].
-///
-/// Each layer compares kind, radius, rotation, color, paint, thickness, and
-/// points. Zero means the icons paint the same.
-int visualPropertyDelta(Assembly a, Assembly b) {
-  final left = iconShapes(a);
-  final right = iconShapes(b);
+/// The three shapes that paint [assembly], larger one first.
+List<IconShape> iconShapes(Assembly assembly) {
+  return materializeIcon(assembly).layers;
+}
+
+/// How many rendered shape properties differ between two snapshots.
+int snapshotPropertyDelta(IconSnapshot a, IconSnapshot b) {
   var count = 0;
-  for (var i = 0; i < left.length; i++) {
-    final l = left[i];
-    final r = right[i];
+  for (var i = 0; i < 3; i++) {
+    final l = a.layers[i];
+    final r = b.layers[i];
     if (l.kind != r.kind) count += 1;
     if (l.radius != r.radius) count += 1;
     if (l.rotation != r.rotation) count += 1;
@@ -126,10 +196,118 @@ int visualPropertyDelta(Assembly a, Assembly b) {
   return count;
 }
 
+/// How many rendered shape properties differ between [a] and [b].
+int visualPropertyDelta(Assembly a, Assembly b) {
+  return snapshotPropertyDelta(materializeIcon(a), materializeIcon(b));
+}
+
+/// True when two snapshots paint the same icon.
+bool samePictureSnapshots(IconSnapshot a, IconSnapshot b) {
+  return a == b;
+}
+
 /// True when [a] and [b] would paint as the same icon.
 bool samePicture(Assembly a, Assembly b) {
   if (a == b) return true;
   return visualPropertyDelta(a, b) == 0;
+}
+
+List<ColorId>? _nonEmptyColors(Iterable<ColorId>? options) {
+  if (options == null) return null;
+  final list = options.toList();
+  return list.isEmpty ? null : list;
+}
+
+/// Copies [baseline] and changes exactly one property for [kind].
+///
+/// Returns null when no alternate value is available or delta would not be 1.
+IconSnapshot? trySingleVisualDiff(
+  IconSnapshot baseline,
+  SingleVisualDiffKind kind,
+  math.Random rng, {
+  Iterable<ColorId>? layer0ColorOptions,
+}) {
+  switch (kind) {
+    case SingleVisualDiffKind.layer0Color:
+      final current = baseline.layers[0].color;
+      final options = _nonEmptyColors(layer0ColorOptions) ??
+          [for (final c in ColorId.values) if (c != current) c];
+      if (options.isEmpty) return null;
+      final picked = options.elementAt(rng.nextInt(options.length));
+      final next = baseline.copyLayer(0, (l) => l.copyWith(color: picked));
+      return snapshotPropertyDelta(baseline, next) == 1 ? next : null;
+    case SingleVisualDiffKind.layer1Color:
+      return _diffLayerColor(baseline, 1, rng);
+    case SingleVisualDiffKind.layer2Color:
+      return _diffLayerColor(baseline, 2, rng);
+    case SingleVisualDiffKind.layer1Kind:
+      return _diffLayerKind(baseline, 1, rng);
+    case SingleVisualDiffKind.layer2Kind:
+      return _diffLayerKind(baseline, 2, rng);
+  }
+}
+
+IconSnapshot? _diffLayerColor(IconSnapshot baseline, int layer, math.Random rng) {
+  final current = baseline.layers[layer].color;
+  final options = [
+    for (final c in ColorId.values)
+      if (c != current) c,
+  ];
+  if (options.isEmpty) return null;
+  final picked = options.elementAt(rng.nextInt(options.length));
+  final next = baseline.copyLayer(layer, (l) => l.copyWith(color: picked));
+  return snapshotPropertyDelta(baseline, next) == 1 ? next : null;
+}
+
+IconSnapshot? _diffLayerKind(IconSnapshot baseline, int layer, math.Random rng) {
+  final current = baseline.layers[layer];
+  final options = [
+    for (final k in IconShapeKind.values)
+      if (k != current.kind &&
+          k != IconShapeKind.star &&
+          current.kind != IconShapeKind.star)
+        k,
+  ];
+  options.shuffle(rng);
+  for (final picked in options) {
+    var shape = current.copyWith(kind: picked, points: 0);
+    if (picked == IconShapeKind.circle) {
+      if (current.rotation != 0.0) continue;
+      shape = shape.copyWith(rotation: 0.0);
+    }
+    final next = baseline.copyLayer(layer, (_) => shape);
+    if (snapshotPropertyDelta(baseline, next) == 1) return next;
+  }
+  return null;
+}
+
+SingleVisualDiffKind? classifySingleVisualDiff(
+  IconSnapshot baseline,
+  IconSnapshot other,
+) {
+  if (snapshotPropertyDelta(baseline, other) != 1) return null;
+  for (var layer = 0; layer < 3; layer++) {
+    final l = baseline.layers[layer];
+    final r = other.layers[layer];
+    if (l.kind != r.kind) {
+      return layer == 1
+          ? SingleVisualDiffKind.layer1Kind
+          : SingleVisualDiffKind.layer2Kind;
+    }
+    if (l.color != r.color) {
+      if (layer == 0) return SingleVisualDiffKind.layer0Color;
+      if (layer == 1) return SingleVisualDiffKind.layer1Color;
+      return SingleVisualDiffKind.layer2Color;
+    }
+    if (l.radius != r.radius ||
+        l.rotation != r.rotation ||
+        l.paint != r.paint ||
+        l.thickness != r.thickness ||
+        l.points != r.points) {
+      return null;
+    }
+  }
+  return null;
 }
 
 /// Greatest distance from [iconCenter] to a point on [shape].
@@ -203,17 +381,16 @@ IconShape _shape(
     kind: kind,
     radius: _radius(random, iconRadius - outset, radiusLo, radiusHi),
     rotation: rotation,
-    color: _layerColor(assembly, layer, random),
+    color: _layerColorAtMaterialize(assembly, layer, random),
     paint: paint,
     thickness: thickness,
     points: points,
   );
 }
 
-/// Layer 0 follows [Assembly.color]. Deeper layers shade from a hue tied to the
-/// structural catalog fields, not [Assembly.color], so a color-only change
-/// alters one painted property.
-ColorId _layerColor(Assembly assembly, int layer, math.Random random) {
+/// Used only while materializing from [Assembly]. Colors live on [IconSnapshot]
+/// afterward.
+ColorId _layerColorAtMaterialize(Assembly assembly, int layer, math.Random random) {
   if (layer == 0) return assembly.color;
   final anchor = ColorId.values[
       (_structureColorBase(assembly) + layer) % ColorId.values.length];

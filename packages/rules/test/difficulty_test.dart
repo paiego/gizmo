@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:gizmo_rules/gizmo_rules.dart';
 import 'package:test/test.dart';
@@ -107,7 +107,7 @@ void main() {
     final colors = <ColorId>{};
     final pulses = <PulseId>{};
     for (var seed = 0; seed < 200; seed++) {
-      final round = buildRound(level: 1, random: Random(seed));
+      final round = buildRound(level: 1, random: math.Random(seed));
       bodies.add(round.original.body);
       holes.add(round.original.hole);
       colors.add(round.original.color);
@@ -123,13 +123,13 @@ void main() {
   test('a decoy is never equal to the original', () {
     for (final level in [1, 3, 4, 6, 7, 10, 11, 41]) {
       for (var seed = 0; seed < 80; seed++) {
-        final round = buildRound(level: level, random: Random(seed));
+        final round = buildRound(level: level, random: math.Random(seed));
         for (final choice in round.choices) {
-          if (choice == round.original) continue;
-          expect(choice, isNot(round.original));
+          if (choice.appearance == round.baseline) continue;
+          expect(samePictureSnapshots(choice.appearance, round.baseline), isFalse);
         }
         expect(
-          round.choices.where((choice) => choice == round.original),
+          round.choices.where((c) => c.appearance == round.baseline),
           hasLength(1),
         );
       }
@@ -139,8 +139,8 @@ void main() {
   test('the original is not always in the same cell', () {
     final positions = <int>{};
     for (var seed = 0; seed < 30; seed++) {
-      final round = buildRound(level: 1, random: Random(seed));
-      positions.add(round.choices.indexOf(round.original));
+      final round = buildRound(level: 1, random: math.Random(seed));
+      positions.add(round.indexOfOriginal());
     }
     expect(positions.length, greaterThan(1));
   });
@@ -178,11 +178,11 @@ void main() {
       for (var seed = 0; seed < 20; seed++) {
         final round = buildRound(
           level: level,
-          random: Random(seed),
+          random: math.Random(seed),
           levelBasedProximity: true,
         );
         expectRoundShape(round, level);
-        for (final decoy in decoysOf(round)) {
+        for (final decoy in decoyAssembliesOf(round)) {
           expect(decoyFieldChanges(round.original, decoy), changes);
           expect(_unchangedFields(round.original, decoy), 6 - changes);
           if (decoy.color != round.original.color) {
@@ -208,36 +208,36 @@ void main() {
     for (var seed = 0; seed < 24; seed++) {
       final first = buildRound(
         level: 1,
-        random: Random(seed),
+        random: math.Random(seed),
         levelBasedProximity: true,
       );
       final tenth = buildRound(
         level: 10,
-        random: Random(seed),
+        random: math.Random(seed),
         levelBasedProximity: true,
       );
       final last = buildRound(
         level: 19,
-        random: Random(seed + 100),
+        random: math.Random(seed + 100),
         levelBasedProximity: true,
       );
-      for (final decoy in decoysOf(first)) {
+      for (final decoy in decoyAssembliesOf(first)) {
         final distance = decoyDistance(first.original, decoy);
         early += distance;
         earlyCount += 1;
-        earlyMin = min(earlyMin, distance);
+        earlyMin = math.min(earlyMin, distance);
         expect(decoyFieldChanges(first.original, decoy), 4);
       }
-      for (final decoy in decoysOf(tenth)) {
+      for (final decoy in decoyAssembliesOf(tenth)) {
         mid += decoyDistance(tenth.original, decoy);
         midCount += 1;
         expect(decoyFieldChanges(tenth.original, decoy), 2);
       }
-      for (final decoy in decoysOf(last)) {
+      for (final decoy in decoyAssembliesOf(last)) {
         final distance = decoyDistance(last.original, decoy);
         late += distance;
         lateCount += 1;
-        lateMax = max(lateMax, distance);
+        lateMax = math.max(lateMax, distance);
         expect(decoyFieldChanges(last.original, decoy), 1);
       }
     }
@@ -265,12 +265,12 @@ void main() {
       for (var seed = 0; seed < 6; seed++) {
         final early = buildRound(
           level: 1,
-          random: Random(seed),
+          random: math.Random(seed),
           decoySimilarity: similarity,
         );
         final late = buildRound(
           level: 99,
-          random: Random(seed + 50),
+          random: math.Random(seed + 50),
           decoySimilarity: similarity,
         );
         expect(early.choiceCount, choiceCountForLevel(1));
@@ -278,7 +278,7 @@ void main() {
         for (final round in [early, late]) {
           final level = round == early ? 1 : 99;
           expectRoundShape(round, level);
-          for (final decoy in decoysOf(round)) {
+          for (final decoy in decoyAssembliesOf(round)) {
             expect(decoyFieldChanges(round.original, decoy), changes);
             expect(_unchangedFields(round.original, decoy), 6 - changes);
             if (decoy.color != round.original.color) {
@@ -300,39 +300,47 @@ void main() {
       for (var seed = 0; seed < 12; seed++) {
         final round = buildRound(
           level: 6,
-          random: Random(seed),
+          random: math.Random(seed),
           decoySimilarity: similarity,
         );
         expectRoundShape(round, 6);
-        for (final decoy in decoysOf(round)) {
+        for (final decoy in decoyChoicesOf(round)) {
           expect(
-            visualPropertyDelta(round.original, decoy),
+            snapshotPropertyDelta(round.baseline, decoy.appearance),
             1,
-            reason: '$decoy vs ${round.original}',
           );
-          expect(samePicture(round.original, decoy), isFalse);
+          expect(
+            classifySingleVisualDiff(round.baseline, decoy.appearance),
+            isNotNull,
+          );
         }
       }
     }
   });
 
-  test('similarity 1.0 decoys are color-only catalog tweaks', () {
-    for (final level in [1, 7, 19]) {
+  test('similarity 1.0 rotates single-diff kinds on snapshots', () {
+    for (final level in [4, 6, 19]) {
+      final decoyCount = choiceCountForLevel(level) - 1;
       for (var seed = 0; seed < 24; seed++) {
         final round = buildRound(
           level: level,
-          random: Random(seed),
+          random: math.Random(seed),
           decoySimilarity: 1,
         );
         expectRoundShape(round, level);
-        for (final decoy in decoysOf(round)) {
-          expect(decoyFieldChanges(round.original, decoy), 1);
-          expect(decoy.color, isNot(round.original.color));
-          expect(decoy.body, round.original.body);
-          expect(decoy.top, round.original.top);
-          expect(decoy.side, round.original.side);
-          expect(decoy.hole, round.original.hole);
-          expect(decoy.pulse, round.original.pulse);
+        final kinds = <SingleVisualDiffKind>{};
+        for (final decoy in decoyChoicesOf(round)) {
+          expect(snapshotPropertyDelta(round.baseline, decoy.appearance), 1);
+          expect(decoy.singleDiffKind, isNotNull);
+          kinds.add(decoy.singleDiffKind!);
+          expect(
+            classifySingleVisualDiff(round.baseline, decoy.appearance),
+            decoy.singleDiffKind,
+          );
+        }
+        expect(kinds.length, greaterThan(1));
+        if (decoyCount >= 7) {
+          expect(kinds.length, greaterThanOrEqualTo(4));
         }
       }
     }
@@ -350,24 +358,26 @@ int _unchangedFields(Assembly original, Assembly decoy) {
   return count;
 }
 
-List<Assembly> decoysOf(BuiltRound round) => [
+List<Assembly> decoyAssembliesOf(BuiltRound round) => [
       for (final choice in round.choices)
-        if (choice != round.original) choice,
+        if (choice.appearance != round.baseline) choice.assembly,
+    ];
+
+List<RoundChoice> decoyChoicesOf(BuiltRound round) => [
+      for (final choice in round.choices)
+        if (choice.appearance != round.baseline) choice,
     ];
 
 void expectRoundShape(BuiltRound round, int level) {
   expect(round.choiceCount, choiceCountForLevel(level));
-  expect(round.choices, contains(round.original));
-  expect(round.choices.toSet(), hasLength(round.choices.length));
+  expect(round.indexOfOriginal(), greaterThanOrEqualTo(0));
+  expect(
+    round.choices.map((c) => c.appearance).toSet(),
+    hasLength(round.choices.length),
+  );
   for (final choice in round.choices) {
-    expect(choice.isLegal, isTrue);
-    if (choice == round.original) continue;
-    final differs = choice.body != round.original.body ||
-        choice.top != round.original.top ||
-        choice.side != round.original.side ||
-        choice.hole != round.original.hole ||
-        choice.color != round.original.color ||
-        choice.pulse != round.original.pulse;
-    expect(differs, isTrue, reason: '$choice matches ${round.original}');
+    expect(choice.assembly.isLegal, isTrue);
+    if (choice.appearance == round.baseline) continue;
+    expect(choice.appearance, isNot(round.baseline));
   }
 }

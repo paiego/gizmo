@@ -73,8 +73,10 @@ class GameSession {
 
   bool _decoysDiffer(BuiltRound round) {
     for (final choice in round.choices) {
-      if (choice == round.original) continue;
-      if (samePicture(choice, round.original)) return false;
+      if (choice.appearance == round.baseline) continue;
+      if (samePictureSnapshots(choice.appearance, round.baseline)) {
+        return false;
+      }
     }
     return true;
   }

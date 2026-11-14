@@ -173,7 +173,7 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
   void _tap(int index) {
     if (_phase != _Phase.choose || !_alive) return;
     final round = _round!;
-    final correct = round.choices[index] == round.original;
+    final correct = round.choices[index].appearance == round.baseline;
     _enter.value = 1;
     setState(() {
       _tapped = index;
@@ -465,7 +465,11 @@ class _Board extends StatelessWidget {
                       child: child,
                     );
                   },
-                  child: IconView(assembly: round.original, size: size),
+                  child: IconView(
+                    assembly: round.original,
+                    appearance: round.baseline,
+                    size: size,
+                  ),
                 ),
               ),
               Positioned(
@@ -480,7 +484,7 @@ class _Board extends StatelessWidget {
       );
     }
 
-    final originalIndex = round.choices.indexOf(round.original);
+    final originalIndex = round.indexOfOriginal();
     return LayoutBuilder(
       builder: (context, constraints) {
         final board = constraints.biggest;
@@ -602,7 +606,7 @@ class _Board extends StatelessWidget {
             : 0.0;
     Widget icon = _Choice(
       key: ValueKey(index),
-      assembly: round.choices[index],
+      choice: round.choices[index],
       size: shown,
       mark: mark,
       onTap: phase == _Phase.choose ? () => onTap(index) : null,
@@ -963,13 +967,13 @@ double _span(double t, double begin, double end, Curve curve) {
 class _Choice extends StatelessWidget {
   const _Choice({
     super.key,
-    required this.assembly,
+    required this.choice,
     required this.size,
     required this.mark,
     required this.onTap,
   });
 
-  final Assembly assembly;
+  final RoundChoice choice;
   final double size;
   final double mark;
   final VoidCallback? onTap;
@@ -984,7 +988,11 @@ class _Choice extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          IconView(assembly: assembly, size: size),
+          IconView(
+            assembly: choice.assembly,
+            appearance: choice.appearance,
+            size: size,
+          ),
           SizedBox.square(
             dimension: diameter,
             child: _CircleTap(
