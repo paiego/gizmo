@@ -126,10 +126,13 @@ int colorRingSteps(ColorId a, ColorId b) {
 }
 
 /// Ring neighbors sit one step away. Color-only decoys must step past them.
-const int minDecoyColorRingSteps = 2;
+///
+/// Two steps still allows pink/blue beside purple and reads as the same hue
+/// on small inner layers.
+const int minDecoyColorRingSteps = 3;
 
 /// Picks for a color-only decoy: at least [minDecoyColorRingSteps] on the ring
-/// and at least [minDecoyColorDistance] in RGB.
+/// and at least [minDecoyColorDistance] in painted RGB ([colorValue]).
 List<ColorId> separatedDecoyColors(ColorId color) {
   return [
     for (final candidate in colorRing)
@@ -142,14 +145,17 @@ List<ColorId> separatedDecoyColors(ColorId color) {
 
 /// Floor used by [distantColors], in Euclidean RGB distance (0 to about 441).
 ///
-/// Near pairs such as orange/amber sit under this. A round may use a nearer
-/// color; this floor only marks the far set.
-const double minDecoyColorDistance = 100;
+/// Near pairs such as purple/pink (~105 RGB at two ring steps) sit under this.
+/// A round may use a nearer color; this floor only marks the far set.
+const double minDecoyColorDistance = 140;
 
-/// Euclidean RGB distance between two catalog colors.
+/// Opaque ARGB painted for [color] (same slots as [warmPalette]).
+int paintedColorArgb(ColorId color) => colorValue[color]!;
+
+/// Euclidean RGB distance between on-screen palette colors for [a] and [b].
 double colorDistance(ColorId a, ColorId b) {
-  final left = colorValue[a]!;
-  final right = colorValue[b]!;
+  final left = paintedColorArgb(a);
+  final right = paintedColorArgb(b);
   var sum = 0;
   for (final shift in const [16, 8, 0]) {
     final delta = ((left >> shift) & 0xFF) - ((right >> shift) & 0xFF);

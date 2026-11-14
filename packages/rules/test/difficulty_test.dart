@@ -35,7 +35,7 @@ void main() {
     expect(colorValue, hasLength(8));
   });
 
-  test('distant colors stay at least 100 away in RGB', () {
+  test('distant colors stay separated on ring and in painted RGB', () {
     var minimum = double.infinity;
     final closest = <(ColorId, ColorId)>[];
     for (final color in ColorId.values) {
@@ -58,12 +58,27 @@ void main() {
         }
       }
     }
-    expect(minimum, colorDistance(ColorId.red, ColorId.amber));
-    expect(minimum, greaterThan(minDecoyColorDistance));
+    expect(minimum, colorDistance(ColorId.amber, ColorId.pink));
+    expect(minimum, greaterThanOrEqualTo(minDecoyColorDistance));
     expect(closest, [
-      (ColorId.red, ColorId.amber),
-      (ColorId.amber, ColorId.red),
+      (ColorId.amber, ColorId.pink),
+      (ColorId.pink, ColorId.amber),
     ]);
+  });
+
+  test('purple color decoys skip same-hue neighbors', () {
+    final options = separatedDecoyColors(ColorId.purple);
+    expect(options, [ColorId.orange, ColorId.amber, ColorId.green]);
+    expect(options, isNot(contains(ColorId.pink)));
+    expect(options, isNot(contains(ColorId.blue)));
+    expect(options, isNot(contains(ColorId.teal)));
+    for (final other in options) {
+      expect(colorRingSteps(ColorId.purple, other), greaterThanOrEqualTo(3));
+      expect(
+        colorDistance(ColorId.purple, other),
+        greaterThanOrEqualTo(minDecoyColorDistance),
+      );
+    }
   });
 
   test('choice count follows the level bands', () {
@@ -404,17 +419,18 @@ void main() {
               greaterThanOrEqualTo(minDecoyColorRingSteps),
             );
           }
-          if (kind == SingleVisualDiffKind.layer1Color) {
-            final layer = 1;
+          if (kind == SingleVisualDiffKind.layer1Color ||
+              kind == SingleVisualDiffKind.layer2Color) {
+            final layer =
+                kind == SingleVisualDiffKind.layer1Color ? 1 : 2;
             final base = round.baseline.layers[layer].color;
             final color = decoy.appearance.layers[layer].color;
             expect(separatedDecoyColors(base), contains(color));
-          }
-          if (kind == SingleVisualDiffKind.layer2Color) {
-            final layer = 2;
-            final base = round.baseline.layers[layer].color;
-            final color = decoy.appearance.layers[layer].color;
-            expect(separatedDecoyColors(base), contains(color));
+            expect(colorRingSteps(base, color), greaterThanOrEqualTo(3));
+            expect(
+              colorDistance(base, color),
+              greaterThanOrEqualTo(minDecoyColorDistance),
+            );
           }
         }
       }
