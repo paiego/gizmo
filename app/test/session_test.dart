@@ -40,8 +40,11 @@ void main() {
     for (var turn = 0; turn < 12; turn++) {
       final round = session.deal();
       for (final choice in round.choices) {
-        if (choice == round.original) continue;
-        expect(samePicture(choice, round.original), isFalse);
+        if (choice.appearance == round.baseline) continue;
+        expect(
+          samePictureSnapshots(choice.appearance, round.baseline),
+          isFalse,
+        );
       }
       session.answer(round: round, correct: true);
     }

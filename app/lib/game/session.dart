@@ -2,8 +2,6 @@ import 'dart:math';
 
 import 'package:gizmo_rules/gizmo_rules.dart';
 
-import '../widgets/icon_shapes.dart';
-
 class PlayedRound {
   const PlayedRound({
     required this.index,
@@ -79,8 +77,10 @@ class GameSession {
 
   bool _decoysDiffer(BuiltRound round) {
     for (final choice in round.choices) {
-      if (choice == round.original) continue;
-      if (samePicture(choice, round.original)) return false;
+      if (choice.appearance == round.baseline) continue;
+      if (samePictureSnapshots(choice.appearance, round.baseline)) {
+        return false;
+      }
     }
     return true;
   }

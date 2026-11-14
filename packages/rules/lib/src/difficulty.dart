@@ -210,14 +210,37 @@ int decoyFieldChanges(Assembly original, Assembly decoy) {
   return count;
 }
 
+/// One board choice: catalog [assembly] plus frozen paint [appearance].
+class RoundChoice {
+  const RoundChoice({
+    required this.assembly,
+    required this.appearance,
+    this.singleDiffKind,
+  });
+
+  final Assembly assembly;
+  final IconSnapshot appearance;
+
+  /// Which single property differs from the round baseline, if any.
+  final SingleVisualDiffKind? singleDiffKind;
+}
+
 /// The original icon and the shuffled choices, which include the original.
 class BuiltRound {
-  const BuiltRound({required this.original, required this.choices});
+  const BuiltRound({
+    required this.original,
+    required this.baseline,
+    required this.choices,
+  });
 
   final Assembly original;
-  final List<Assembly> choices;
+  final IconSnapshot baseline;
+  final List<RoundChoice> choices;
 
   int get choiceCount => choices.length;
+
+  int indexOfOriginal() =>
+      choices.indexWhere((c) => c.appearance == baseline);
 }
 
 /// Draws a round for [level].
@@ -251,45 +274,134 @@ BuiltRound buildRound({
     rampSlope: decoySimilarityRampSlope,
     levelBasedProximity: levelBasedProximity,
   );
+  final baseline = materializeIcon(original);
   final changes = decoyVariationCountForSimilarity(effectiveSimilarity);
   final colorCap = maxMutationColorDistanceForSimilarity(effectiveSimilarity);
-  final decoys = _useVisualProximity(effectiveSimilarity, false)
-      ? _mutateOriginalVisual(
-          original,
-          level,
-          rng,
-          decoyVisualVariationCountForSimilarity(effectiveSimilarity),
-          colorCap,
-          preferAdjacentColor: _isMaxSimilarity(effectiveSimilarity),
-        )
-      : _mutateOriginal(
-          original,
-          level,
-          rng,
-          changes,
-          colorCap,
-          decoySimilarity: effectiveSimilarity,
-          levelBasedProximity: false,
-        );
-  final expected = choiceCountForLevel(level);
-  if (decoys.length + 1 != expected) {
-    throw StateError('Built ${decoys.length + 1} choices, expected $expected.');
+
+  final List<RoundChoice> decoyChoices;
+  if (_clampSimilarity(effectiveSimilarity) >= 0.75) {
+    decoyChoices = _buildSnapshotDecoys(
+      original: original,
+      baseline: baseline,
+      level: level,
+      rng: rng,
+      preferAdjacentColor: _isMaxSimilarity(effectiveSimilarity),
+    );
+  } else {
+    final assemblies = _mutateOriginal(
+      original,
+      level,
+      rng,
+      changes,
+      colorCap,
+      decoySimilarity: effectiveSimilarity,
+      levelBasedProximity: levelBasedProximity,
+    );
+    decoyChoices = [
+      for (final assembly in assemblies)
+        RoundChoice(
+          assembly: assembly,
+          appearance: materializeIcon(assembly),
+        ),
+    ];
   }
-  _requireDecoysDiffer(original, decoys);
-  final choices = <Assembly>[original, ...decoys]..shuffle(rng);
-  return BuiltRound(original: original, choices: List.unmodifiable(choices));
+
+  final expected = choiceCountForLevel(level);
+  if (decoyChoices.length + 1 != expected) {
+    throw StateError(
+      'Built ${decoyChoices.length + 1} choices, expected $expected.',
+    );
+  }
+  _requireAppearancesDiffer(baseline, decoyChoices);
+  final choices = <RoundChoice>[
+    RoundChoice(assembly: original, appearance: baseline),
+    ...decoyChoices,
+  ]..shuffle(rng);
+  return BuiltRound(
+    original: original,
+    baseline: baseline,
+    choices: List.unmodifiable(choices),
+  );
 }
 
-void _requireDecoysDiffer(Assembly original, List<Assembly> decoys) {
-  final seen = <Assembly>{};
+void _requireAppearancesDiffer(
+  IconSnapshot baseline,
+  List<RoundChoice> decoys,
+) {
+  final seen = <IconSnapshot>{baseline};
   for (final decoy in decoys) {
-    if (decoy == original) {
-      throw StateError('Decoy equals the original ($original).');
+    if (decoy.appearance == baseline) {
+      throw StateError('Decoy appearance equals the baseline.');
     }
-    if (!seen.add(decoy)) {
-      throw StateError('Repeated decoy $decoy.');
+    if (!seen.add(decoy.appearance)) {
+      throw StateError('Repeated decoy appearance.');
     }
   }
+}
+
+List<RoundChoice> _buildSnapshotDecoys({
+  required Assembly original,
+  required IconSnapshot baseline,
+  required int level,
+  required Random rng,
+  required bool preferAdjacentColor,
+}) {
+  final count = choiceCountForLevel(level) - 1;
+  final kinds = List<SingleVisualDiffKind>.from(singleVisualDiffKinds)
+    ..shuffle(rng);
+  final layer0Colors = preferAdjacentColor
+      ? [
+          for (final c in adjacentColors(original.color))
+            if (c != original.color) c,
+        ]
+      : null;
+  final picked = <RoundChoice>[];
+  final used = <IconSnapshot>{baseline};
+  final usedKinds = <SingleVisualDiffKind>{};
+  for (var slot = 0; slot < count; slot++) {
+    final preferred = kinds[slot % kinds.length];
+    final tryKinds = [
+      preferred,
+      for (final kind in kinds)
+        if (kind != preferred && !usedKinds.contains(kind)) kind,
+      for (final kind in kinds)
+        if (kind != preferred && usedKinds.contains(kind)) kind,
+    ];
+    RoundChoice? choice;
+    for (final kind in tryKinds) {
+      for (var attempt = 0; attempt < 32; attempt++) {
+        final next = trySingleVisualDiff(
+          baseline,
+          kind,
+          rng,
+          layer0ColorOptions: kind == SingleVisualDiffKind.layer0Color
+              ? layer0Colors
+              : null,
+        );
+        if (next == null || !used.add(next)) continue;
+        final applied = classifySingleVisualDiff(baseline, next);
+        if (applied == null) continue;
+        final assembly = applied == SingleVisualDiffKind.layer0Color
+            ? original.copyWith(color: next.layers[0].color)
+            : original;
+        usedKinds.add(applied);
+        choice = RoundChoice(
+          assembly: assembly,
+          appearance: next,
+          singleDiffKind: applied,
+        );
+        break;
+      }
+      if (choice != null) break;
+    }
+    if (choice == null) {
+      throw StateError(
+        'No snapshot decoy for slot $slot of $original at level $level.',
+      );
+    }
+    picked.add(choice);
+  }
+  return picked;
 }
 
 Assembly _randomOriginal(Random rng) {
@@ -310,75 +422,6 @@ Assembly _randomOriginal(Random rng) {
 }
 
 enum _Field { body, top, side, hole, color, pulse }
-
-List<Assembly> _mutateOriginalVisual(
-  Assembly original,
-  int level,
-  Random rng,
-  int visualDelta,
-  double colorCap, {
-  bool preferAdjacentColor = false,
-}) {
-  final pool = _visualMutations(original, visualDelta, colorCap);
-  pool.shuffle(rng);
-  pool.sort((a, b) {
-    final deltaA = visualPropertyDelta(original, a);
-    final deltaB = visualPropertyDelta(original, b);
-    if (deltaA != deltaB) return deltaA.compareTo(deltaB);
-    if (preferAdjacentColor) {
-      final colorA = _colorPickRank(original, a);
-      final colorB = _colorPickRank(original, b);
-      if (colorA != colorB) return colorA.compareTo(colorB);
-    }
-    return decoyDistance(original, a).compareTo(decoyDistance(original, b));
-  });
-  final count = choiceCountForLevel(level) - 1;
-  final picked = <Assembly>[];
-  final used = <Assembly>{original};
-  for (final candidate in pool) {
-    if (!used.add(candidate)) continue;
-    picked.add(candidate);
-    if (picked.length == count) return picked;
-  }
-  throw StateError(
-    'Only ${picked.length} visual mutations with delta $visualDelta for '
-    '$original at level $level.',
-  );
-}
-
-List<Assembly> _visualMutations(
-  Assembly original,
-  int visualDelta,
-  double colorCap,
-) {
-  final found = <Assembly>[];
-  for (final candidate in legalAssemblies()) {
-    if (candidate == original) continue;
-    if (visualPropertyDelta(original, candidate) != visualDelta) continue;
-    if (!_visualMutationColorAllowed(original, candidate, colorCap)) continue;
-    found.add(candidate);
-  }
-  return found;
-}
-
-bool _visualMutationColorAllowed(
-  Assembly original,
-  Assembly candidate,
-  double colorCap,
-) {
-  if (original.color == candidate.color) return true;
-  if (decoyFieldChanges(original, candidate) == 1) {
-    return true;
-  }
-  return colorDistance(original.color, candidate.color) <= colorCap;
-}
-
-/// Lower is closer. Ring neighbors beat distant palette colors.
-int _colorPickRank(Assembly original, Assembly candidate) {
-  if (original.color == candidate.color) return 0;
-  if (adjacentColors(original.color).contains(candidate.color)) return 1;
-  return 100 + colorDistance(original.color, candidate.color).round();
-}
 
 /// Legal mutations of [original] that change exactly [changes] fields.
 ///

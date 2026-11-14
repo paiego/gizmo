@@ -114,7 +114,7 @@ void main() {
     expect(find.byType(IconView), findsNWidgets(3));
 
     await tester
-        .tap(find.byKey(ValueKey(round.choices.indexOf(round.original))));
+        .tap(find.byKey(ValueKey(round.indexOfOriginal())));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 800));
     expect(find.byType(IconView), findsOneWidget);
@@ -135,11 +135,14 @@ void main() {
     );
     await _reachChoices(tester);
 
-    final original = round.choices.indexOf(round.original);
-    final wrong =
-        round.choices.indexWhere((choice) => choice != round.original);
+    final original = round.indexOfOriginal();
+    final wrong = round.choices.indexWhere(
+      (choice) => choice.appearance != round.baseline,
+    );
     final leaver = round.choices.indexWhere(
-      (choice) => choice != round.original && choice != round.choices[wrong],
+      (choice) =>
+          choice.appearance != round.baseline &&
+          choice.appearance != round.choices[wrong].appearance,
     );
     final before = tester.getRect(find.byKey(ValueKey(original)));
 
@@ -281,7 +284,7 @@ void main() {
     );
     await _reachChoices(tester);
     await tester.tap(
-      find.byKey(ValueKey(round.choices.indexOf(round.original))),
+      find.byKey(ValueKey(round.indexOfOriginal())),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
@@ -522,7 +525,10 @@ void main() {
     final round = session.deal();
     expect(session.level, 1);
     expect(round.choiceCount, 3);
-    expect(round.choices, contains(round.original));
+    expect(
+      round.choices.map((c) => c.appearance),
+      contains(round.baseline),
+    );
   });
 
   testWidgets('admin mode sets the level for the next round', (tester) async {
@@ -547,7 +553,7 @@ void main() {
     expect(session.level, 1);
 
     await tester.tap(
-      find.byKey(ValueKey(round.choices.indexOf(round.original))),
+      find.byKey(ValueKey(round.indexOfOriginal())),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -579,7 +585,7 @@ void main() {
     await _reachChoices(tester);
     await tester.enterText(find.byType(TextField), '19');
     await tester.tap(
-      find.byKey(ValueKey(round.choices.indexOf(round.original))),
+      find.byKey(ValueKey(round.indexOfOriginal())),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -611,7 +617,7 @@ void main() {
     final early = tester.getSize(find.byType(IconView).first);
     await tester.enterText(find.byType(TextField), '19');
     await tester.tap(
-      find.byKey(ValueKey(round.choices.indexOf(round.original))),
+      find.byKey(ValueKey(round.indexOfOriginal())),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
