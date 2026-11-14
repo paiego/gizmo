@@ -297,83 +297,83 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
                     icon: Icon(Icons.arrow_back, color: chrome.ink),
                   ),
                   Expanded(
-                    child: Row(
-                      children: [
-                        Text(
-                          'Score ',
-                          style: TextStyle(fontSize: 16, color: chrome.muted),
-                        ),
-                        Text(
-                          '${_session.score}',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: chrome.ink,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Level ',
-                          style: TextStyle(fontSize: 16, color: chrome.muted),
-                        ),
-                        Text(
-                          '${_session.level}',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: chrome.ink,
-                          ),
-                        ),
-                        if (widget.adminMode) ...[
-                          const SizedBox(width: 12),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        children: [
                           Text(
-                            'Sim ',
+                            'Score ',
                             style: TextStyle(fontSize: 16, color: chrome.muted),
                           ),
                           Text(
-                            _session.activeSimilarity.toStringAsFixed(2),
-                            key: const ValueKey('admin-similarity'),
+                            '${_session.score}',
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
                               color: chrome.ink,
                             ),
                           ),
-                        ],
-                        if (widget.adminMode && _phase == _Phase.choose) ...[
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 64,
-                            child: TextField(
-                              controller: _nextLevel,
-                              keyboardType: TextInputType.number,
-                              textInputAction: TextInputAction.done,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              onChanged: _submitLevel,
-                              onSubmitted: _submitLevel,
-                              style: TextStyle(fontSize: 16, color: chrome.ink),
-                              decoration: InputDecoration(
-                                isDense: true,
-                                hintText: 'Next',
-                                filled: true,
-                                fillColor: chrome.paper,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 8,
+                          const SizedBox(width: 12),
+                          Text(
+                            'Level ',
+                            style: TextStyle(fontSize: 16, color: chrome.muted),
+                          ),
+                          Text(
+                            '${_session.level}',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: chrome.ink,
+                            ),
+                          ),
+                          if (widget.adminMode) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              'Sim ',
+                              style:
+                                  TextStyle(fontSize: 13, color: chrome.muted),
+                            ),
+                            Text(
+                              _session.activeSimilarity.toStringAsFixed(2),
+                              key: const ValueKey('admin-similarity'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: chrome.ink,
+                              ),
+                            ),
+                          ],
+                          if (widget.adminMode && _phase == _Phase.choose) ...[
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 56,
+                              child: TextField(
+                                controller: _nextLevel,
+                                keyboardType: TextInputType.number,
+                                textInputAction: TextInputAction.done,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                onChanged: _submitLevel,
+                                onSubmitted: _submitLevel,
+                                style:
+                                    TextStyle(fontSize: 16, color: chrome.ink),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  hintText: 'Next',
+                                  filled: true,
+                                  fillColor: chrome.paper,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 8,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ] else if (widget.adminMode) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            'Admin',
-                            style: TextStyle(fontSize: 13, color: chrome.muted),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                   ChanceMarks(remaining: _session.chances),
