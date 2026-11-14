@@ -70,8 +70,8 @@ class IconPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     paintCount += 1;
     final side = size.shortestSide;
-    final reach = side / 2 - 1;
-    final scale = reach <= 0 ? side / 100 : reach / iconRadius;
+    final reach = (side / 2 - 1) * iconPaintScale;
+    final scale = reach <= 0 ? side / 100 * iconPaintScale : reach / iconRadius;
     canvas.save();
     canvas.translate(side / 2, side / 2);
     canvas.scale(scale);

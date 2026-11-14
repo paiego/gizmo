@@ -2,8 +2,6 @@ import 'dart:math';
 
 import 'package:gizmo_rules/gizmo_rules.dart';
 
-import '../widgets/icon_shapes.dart';
-
 class PlayedRound {
   const PlayedRound({
     required this.index,
