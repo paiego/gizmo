@@ -81,10 +81,10 @@ class IconPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     paintCount += 1;
     final side = size.shortestSide;
-    final reach = (side / 2 - 1) * inkReachFactor * iconPaintScale;
+    final reach = (side / 2 - 1) * inkReachFactor;
     final snapshot = appearance ?? materializeIcon(assembly);
     final ink = snapshotInkRadius(snapshot);
-    final scale = reach <= 0 ? side / 100 * iconPaintScale : reach / ink;
+    final scale = reach <= 0 ? side / 100 : reach / ink;
     canvas.save();
     canvas.translate(side / 2, side / 2);
     canvas.scale(scale);
