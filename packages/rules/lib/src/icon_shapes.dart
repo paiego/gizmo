@@ -320,6 +320,31 @@ double measuredRadius(IconShape shape) {
   return farthest;
 }
 
+/// Outer ink radius for [shape], including half the stroke width.
+double inkRadius(IconShape shape) {
+  final outset = shape.paint == IconPaint.stroke ? shape.thickness / 2 : 0.0;
+  return measuredRadius(shape) + outset;
+}
+
+/// Greatest ink reach across [assembly]'s painted layers.
+///
+/// [IconPainter] scales each assembly so this value fills the cell. Using the
+/// shared [iconRadius] constant instead made assemblies with larger geometry
+/// look bigger on screen than the original.
+double assemblyInkRadius(Assembly assembly) {
+  return snapshotInkRadius(materializeIcon(assembly));
+}
+
+/// Greatest ink reach across frozen [snapshot] layers.
+double snapshotInkRadius(IconSnapshot snapshot) {
+  var farthest = 0.0;
+  for (final shape in snapshot.layers) {
+    final reach = inkRadius(shape);
+    if (reach > farthest) farthest = reach;
+  }
+  return farthest > 0 ? farthest : iconRadius;
+}
+
 /// Outline points. A circle reports the four compass points of its radius.
 List<IconPoint> shapePoints(IconShape shape) {
   if (shape.kind == IconShapeKind.circle) {

@@ -95,6 +95,64 @@ double _clampSimilarity(double decoySimilarity) {
   return decoySimilarity.clamp(0.0, 1.0);
 }
 
+/// Highest level the ramp targets before it stays at [endSimilarity].
+const int decoySimilarityRampMaxLevel = 19;
+
+/// Slider values at 1 mean instant max (infinite ramp slope).
+const double _instantRampSlopeThreshold = 0.999;
+
+/// Fraction of the start→max span applied at [level] when ramping (0..1).
+///
+/// [rampSlope] is 0..1 from the profile UI. 0 keeps progress at zero (flat at
+/// start similarity). 1 jumps to max on the first level. Values in between use
+/// an exponential curve across levels up to [maxLevel].
+double decoySimilarityRampProgress({
+  required int level,
+  required double rampSlope,
+  int maxLevel = decoySimilarityRampMaxLevel,
+}) {
+  if (level < 1) {
+    throw ArgumentError.value(level, 'level', 'Level starts at 1.');
+  }
+  if (maxLevel < 1) {
+    throw ArgumentError.value(maxLevel, 'maxLevel', 'maxLevel starts at 1.');
+  }
+  final slope = _clampSimilarity(rampSlope);
+  if (slope <= 0) return 0;
+  if (slope >= _instantRampSlopeThreshold) return 1;
+  if (level >= maxLevel || maxLevel == 1) return 1;
+  final t = (level - 1) / (maxLevel - 1);
+  if (t <= 0) return 0;
+  final k = 0.25 + slope * 15;
+  final scaled = exp(k * t) - 1;
+  final full = exp(k) - 1;
+  return (scaled / full).clamp(0.0, 1.0);
+}
+
+/// Active decoy similarity for a round at [level].
+///
+/// When [levelBasedProximity] is false, returns [startSimilarity] only. When
+/// true, interpolates from [startSimilarity] to [endSimilarity] using
+/// [rampSlope] and [maxLevel].
+double activeDecoySimilarityForLevel({
+  required int level,
+  required double startSimilarity,
+  required double endSimilarity,
+  required double rampSlope,
+  required bool levelBasedProximity,
+  int maxLevel = decoySimilarityRampMaxLevel,
+}) {
+  final start = _clampSimilarity(startSimilarity);
+  if (!levelBasedProximity) return start;
+  final end = _clampSimilarity(endSimilarity);
+  final progress = decoySimilarityRampProgress(
+    level: level,
+    rampSlope: rampSlope,
+    maxLevel: maxLevel,
+  );
+  return start + (end - start) * progress;
+}
+
 /// Slider values near 1.0 may sit slightly below one because of floats.
 const double _maxSimilarityThreshold = 0.999;
 
@@ -188,43 +246,46 @@ class BuiltRound {
 /// Draws a round for [level].
 ///
 /// The original is one of [BuiltRound.choices]. Choice count still follows
-/// [level]. Closeness does not, unless [levelBasedProximity] is true.
+/// [level]. Closeness follows [activeDecoySimilarityForLevel] from profile
+/// settings unless [levelBasedProximity] is false, in which case only
+/// [decoySimilarity] applies.
 ///
-/// With level-based proximity off (the default), [decoySimilarity] below 0.75
-/// uses [decoyVariationCountForSimilarity] catalog-field mutations. From 0.75
-/// up, decoys are catalog assemblies with a fixed [visualPropertyDelta] from
-/// the original (1 at 0.75 and 1.0). A changed color stays within
-/// [maxMutationColorDistanceForSimilarity] except for single-field color tweaks
-/// at high visual proximity.
+/// Below 0.75 active similarity, [decoyVariationCountForSimilarity] catalog-field
+/// mutations apply. From 0.75 up, decoys use a fixed [visualPropertyDelta]
+/// from the original (1 at 0.75 and 1.0).
 ///
-/// With level-based proximity on, [decoySimilarity] is ignored and the
-/// legacy level table ([decoyVariationCount], [maxMutationColorDistance])
-/// decides closeness.
+/// With level-based proximity on, [decoySimilarity] is the start value,
+/// [decoySimilarityMax] the end value, and [decoySimilarityRampSlope] the ramp
+/// (0 flat, 1 instant max). Those produce the active similarity at [level].
 BuiltRound buildRound({
   required int level,
   Random? random,
   double decoySimilarity = 0,
+  double decoySimilarityMax = 1,
+  double decoySimilarityRampSlope = 0.5,
   bool levelBasedProximity = false,
 }) {
   final rng = random ?? Random();
   final original = _randomOriginal(rng);
+  final effectiveSimilarity = activeDecoySimilarityForLevel(
+    level: level,
+    startSimilarity: decoySimilarity,
+    endSimilarity: decoySimilarityMax,
+    rampSlope: decoySimilarityRampSlope,
+    levelBasedProximity: levelBasedProximity,
+  );
   final baseline = materializeIcon(original);
-  final changes = levelBasedProximity
-      ? decoyVariationCount(level)
-      : decoyVariationCountForSimilarity(decoySimilarity);
-  final colorCap = levelBasedProximity
-      ? maxMutationColorDistance(level)
-      : maxMutationColorDistanceForSimilarity(decoySimilarity);
+  final changes = decoyVariationCountForSimilarity(effectiveSimilarity);
+  final colorCap = maxMutationColorDistanceForSimilarity(effectiveSimilarity);
 
   final List<RoundChoice> decoyChoices;
-  if (_useVisualProximity(decoySimilarity, levelBasedProximity)) {
+  if (_clampSimilarity(effectiveSimilarity) >= 0.75) {
     decoyChoices = _buildSnapshotDecoys(
       original: original,
       baseline: baseline,
       level: level,
       rng: rng,
-      preferAdjacentColor:
-          !levelBasedProximity && _isMaxSimilarity(decoySimilarity),
+      preferAdjacentColor: _isMaxSimilarity(effectiveSimilarity),
     );
   } else {
     final assemblies = _mutateOriginal(
@@ -233,7 +294,7 @@ BuiltRound buildRound({
       rng,
       changes,
       colorCap,
-      decoySimilarity: decoySimilarity,
+      decoySimilarity: effectiveSimilarity,
       levelBasedProximity: levelBasedProximity,
     );
     decoyChoices = [

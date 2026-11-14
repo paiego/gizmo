@@ -67,6 +67,8 @@ class PlayScreen extends StatefulWidget {
     this.localOnly = false,
     this.scores = const LocalScoreStore(),
     this.decoySimilarity = 0,
+    this.decoySimilarityMax = 1,
+    this.decoySimilarityRampSlope = 0.5,
     this.levelBasedProximity = false,
   });
 
@@ -74,6 +76,8 @@ class PlayScreen extends StatefulWidget {
   final GameSession? session;
   final bool adminMode;
   final double decoySimilarity;
+  final double decoySimilarityMax;
+  final double decoySimilarityRampSlope;
   final bool levelBasedProximity;
 
   /// Firebase user id this run is allowed to score. Null on the online path
@@ -114,6 +118,8 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
         GameSession(
           adminMode: widget.adminMode,
           decoySimilarity: widget.decoySimilarity,
+          decoySimilarityMax: widget.decoySimilarityMax,
+          decoySimilarityRampSlope: widget.decoySimilarityRampSlope,
           levelBasedProximity: widget.levelBasedProximity,
         );
     _look = AnimationController(vsync: this, duration: _lookTime)
@@ -245,6 +251,8 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
             transcript: _session.transcript(widget.playerName),
             adminMode: widget.adminMode,
             decoySimilarity: widget.decoySimilarity,
+            decoySimilarityMax: widget.decoySimilarityMax,
+            decoySimilarityRampSlope: widget.decoySimilarityRampSlope,
             levelBasedProximity: widget.levelBasedProximity,
             userId: widget.userId,
             localOnly: widget.localOnly,

@@ -1,8 +1,11 @@
 import 'dart:ui';
 
-import 'package:gizmo_rules/gizmo_rules.dart' as rules;
+import 'package:gizmo_rules/gizmo_rules.dart' hide shapePoints, measuredRadius, iconCenter;
+import 'package:gizmo_rules/gizmo_rules.dart' as rules
+    show measuredRadius, shapePoints;
 
-export 'package:gizmo_rules/gizmo_rules.dart' hide shapePoints, measuredRadius;
+export 'package:gizmo_rules/gizmo_rules.dart'
+    hide shapePoints, measuredRadius, iconCenter;
 
 /// Center of [iconRadius] in the 100-unit box (Flutter [Offset]).
 const Offset iconCenter = Offset(50, 50);

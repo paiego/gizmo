@@ -33,6 +33,8 @@ class AccountRepository {
   static const adminModeKey = 'account_admin_mode';
   static const pictureKey = 'account_picture';
   static const decoySimilarityKey = 'decoy_similarity';
+  static const decoySimilarityMaxKey = 'decoy_similarity_max';
+  static const decoySimilarityRampSlopeKey = 'decoy_similarity_ramp_slope';
   static const levelBasedProximityKey = 'level_based_proximity';
 
   Future<GizmoAccount> read() async {
@@ -48,6 +50,9 @@ class AccountRepository {
       pictureId: prefs.getString(pictureKey) ?? GizmoAccount.defaultPictureId,
       themeId: themeId ?? 'warm',
       decoySimilarity: _similarity(prefs.getDouble(decoySimilarityKey)),
+      decoySimilarityMax: _similarity(prefs.getDouble(decoySimilarityMaxKey), 1),
+      decoySimilarityRampSlope:
+          _similarity(prefs.getDouble(decoySimilarityRampSlopeKey), 0.5),
       levelBasedProximity: prefs.getBool(levelBasedProximityKey) ?? false,
     );
   }
@@ -72,11 +77,19 @@ class AccountRepository {
       decoySimilarityKey,
       _similarity(account.decoySimilarity),
     );
+    await prefs.setDouble(
+      decoySimilarityMaxKey,
+      _similarity(account.decoySimilarityMax, 1),
+    );
+    await prefs.setDouble(
+      decoySimilarityRampSlopeKey,
+      _similarity(account.decoySimilarityRampSlope, 0.5),
+    );
     await prefs.setBool(levelBasedProximityKey, account.levelBasedProximity);
   }
 
-  static double _similarity(double? value) {
-    if (value == null || value.isNaN) return 0;
+  static double _similarity(double? value, [double fallback = 0]) {
+    if (value == null || value.isNaN) return fallback;
     return value.clamp(0.0, 1.0).toDouble();
   }
 
