@@ -72,6 +72,31 @@ void main() {
     expect(session.level, 13);
   });
 
+  test('active similarity follows the profile settings at the current level', () {
+    final fixed = GameSession(
+      random: Random(1),
+      decoySimilarity: 0.4,
+      levelBasedProximity: false,
+    );
+    expect(fixed.activeSimilarity, 0.4);
+    fixed.answer(round: fixed.deal(), correct: true);
+    expect(fixed.activeSimilarity, 0.4);
+
+    final ramp = GameSession(
+      random: Random(2),
+      adminMode: true,
+      decoySimilarity: 0,
+      decoySimilarityMax: 1,
+      decoySimilarityRampSlope: 0.5,
+      levelBasedProximity: true,
+    );
+    expect(ramp.activeSimilarity, 0);
+    ramp.queueLevel(19);
+    ramp.answer(round: ramp.deal(), correct: true);
+    expect(ramp.level, 19);
+    expect(ramp.activeSimilarity, 1);
+  });
+
   test('admin mode keeps going after misses and the level still climbs', () {
     final session = GameSession(random: Random(9), adminMode: true);
     var finished = false;

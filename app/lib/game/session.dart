@@ -50,6 +50,18 @@ class GameSession {
   int chances = 3;
   int? _queuedLevel;
 
+  /// Active decoy similarity for the current [level] (0..1).
+  ///
+  /// How alike decoys are to the original for the round about to be dealt or
+  /// already dealt at this level.
+  double get activeSimilarity => activeDecoySimilarityForLevel(
+        level: level,
+        startSimilarity: decoySimilarity,
+        endSimilarity: decoySimilarityMax,
+        rampSlope: decoySimilarityRampSlope,
+        levelBasedProximity: levelBasedProximity,
+      );
+
   BuiltRound deal() {
     for (var attempt = 0; attempt < 12; attempt++) {
       final round = buildRound(

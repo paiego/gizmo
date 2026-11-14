@@ -525,6 +525,37 @@ void main() {
     expect(round.choices, contains(round.original));
   });
 
+  testWidgets('admin mode prints the similarity index while playing', (
+    tester,
+  ) async {
+    final session = GameSession(
+      random: Random(0),
+      adminMode: true,
+      decoySimilarity: 0.35,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayScreen(
+          playerName: 'Paul',
+          session: session,
+          adminMode: true,
+          decoySimilarity: 0.35,
+        ),
+      ),
+    );
+    expect(find.text('Sim '), findsOneWidget);
+    expect(find.byKey(const ValueKey('admin-similarity')), findsOneWidget);
+    expect(find.text('0.35'), findsOneWidget);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: PlayScreen(playerName: 'Paul'),
+      ),
+    );
+    expect(find.text('Sim '), findsNothing);
+    expect(find.byKey(const ValueKey('admin-similarity')), findsNothing);
+  });
+
   testWidgets('admin mode sets the level for the next round', (tester) async {
     final session = GameSession(random: Random(0), adminMode: true);
     final round = buildRound(level: 1, random: Random(0));

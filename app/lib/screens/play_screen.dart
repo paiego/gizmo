@@ -324,6 +324,22 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
                             color: chrome.ink,
                           ),
                         ),
+                        if (widget.adminMode) ...[
+                          const SizedBox(width: 12),
+                          Text(
+                            'Sim ',
+                            style: TextStyle(fontSize: 16, color: chrome.muted),
+                          ),
+                          Text(
+                            _session.activeSimilarity.toStringAsFixed(2),
+                            key: const ValueKey('admin-similarity'),
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: chrome.ink,
+                            ),
+                          ),
+                        ],
                         if (widget.adminMode && _phase == _Phase.choose) ...[
                           const SizedBox(width: 8),
                           SizedBox(
