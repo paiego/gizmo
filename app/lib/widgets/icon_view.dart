@@ -4,6 +4,9 @@ import 'package:gizmo_rules/gizmo_rules.dart';
 import '../palette_scope.dart';
 import 'icon_shapes.dart';
 
+/// Painted ink uses this fraction of the cell reach (half of the prior fill).
+const double iconPaintScale = 0.5;
+
 /// Paints one assembly as three shapes, one pixel inside the cell.
 ///
 /// When [appearance] is set, those frozen layers paint instead of materializing
