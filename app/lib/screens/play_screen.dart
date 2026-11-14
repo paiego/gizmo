@@ -722,7 +722,7 @@ const _fullChoices = 8;
 double _iconSize(Size board) {
   final roomy = _roomySize(board);
   final packed = _maxPackedCell(board, _fullChoices);
-  return math.min(roomy, packed);
+  return math.min(roomy, packed) * iconPaintScale;
 }
 
 /// Half again the roomy estimate for a three-choice board.
