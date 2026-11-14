@@ -81,9 +81,9 @@ int decoyVariationCountForSimilarity(double decoySimilarity) {
 
 /// Largest RGB distance when a similarity mutation changes color.
 ///
-/// 0 allows any other catalog color. Values near 1 use ring neighbors only;
-/// just below that, about 60 RGB. In between, the cap falls linearly from
-/// 320 to 60. Level does not enter this.
+/// 0 allows any other catalog color. Near 1, color-only decoys use
+/// [separatedDecoyColors]; the cap still limits other catalog color picks to
+/// about 60 RGB. In between, the cap falls linearly from 320 to 60.
 double maxMutationColorDistanceForSimilarity(double decoySimilarity) {
   final similarity = _clampSimilarity(decoySimilarity);
   if (similarity <= 0) return double.infinity;
@@ -155,10 +155,6 @@ double activeDecoySimilarityForLevel({
 
 /// Slider values near 1.0 may sit slightly below one because of floats.
 const double _maxSimilarityThreshold = 0.999;
-
-bool _isMaxSimilarity(double decoySimilarity) {
-  return _clampSimilarity(decoySimilarity) >= _maxSimilarityThreshold;
-}
 
 /// When similarity is high, decoys should differ in rendered properties, not
 /// raw catalog field counts.
@@ -285,7 +281,6 @@ BuiltRound buildRound({
       baseline: baseline,
       level: level,
       rng: rng,
-      preferAdjacentColor: _isMaxSimilarity(effectiveSimilarity),
     );
   } else {
     final assemblies = _mutateOriginal(
@@ -344,17 +339,11 @@ List<RoundChoice> _buildSnapshotDecoys({
   required IconSnapshot baseline,
   required int level,
   required Random rng,
-  required bool preferAdjacentColor,
 }) {
   final count = choiceCountForLevel(level) - 1;
   final kinds = List<SingleVisualDiffKind>.from(singleVisualDiffKinds)
     ..shuffle(rng);
-  final layer0Colors = preferAdjacentColor
-      ? [
-          for (final c in adjacentColors(original.color))
-            if (c != original.color) c,
-        ]
-      : null;
+  final layer0Colors = separatedDecoyColors(original.color);
   final picked = <RoundChoice>[];
   final used = <IconSnapshot>{baseline};
   final usedKinds = <SingleVisualDiffKind>{};
@@ -436,12 +425,10 @@ List<Assembly> _mutateOriginal(
   double decoySimilarity = 0,
   bool levelBasedProximity = false,
 }) {
-  final tightColor = !levelBasedProximity && _isMaxSimilarity(decoySimilarity);
   final pool = _mutations(
     original,
     changes,
     colorCap,
-    tightColor: tightColor,
   );
   if (!levelBasedProximity &&
       _clampSimilarity(decoySimilarity) >= 0.75) {
@@ -477,14 +464,13 @@ void _sortMutationsByProximity(
 List<Assembly> _mutations(
   Assembly original,
   int changes,
-  double colorCap, {
-  bool tightColor = false,
-}) {
+  double colorCap,
+) {
   final found = <Assembly>[];
   for (final combo in _combinations(changes)) {
     final options = [
       for (final field in combo)
-        _alternatives(original, field, colorCap, tightColor: tightColor),
+        _alternatives(original, field, colorCap),
     ];
     if (options.any((values) => values.isEmpty)) continue;
     void walk(int index, Map<_Field, Object> picked) {
@@ -527,9 +513,8 @@ List<List<_Field>> _combinations(int count) {
 List<Object> _alternatives(
   Assembly original,
   _Field field,
-  double colorCap, {
-  bool tightColor = false,
-}) {
+  double colorCap,
+) {
   switch (field) {
     case _Field.body:
       return [
@@ -557,17 +542,9 @@ List<Object> _alternatives(
           if (value != original.pulse) value
       ];
     case _Field.color:
-      if (tightColor) {
-        return [
-          for (final value in adjacentColors(original.color))
-            if (value != original.color) value,
-        ];
-      }
       return [
-        for (final value in ColorId.values)
-          if (value != original.color &&
-              colorDistance(original.color, value) <= colorCap)
-            value,
+        for (final value in separatedDecoyColors(original.color))
+          if (colorDistance(original.color, value) <= colorCap) value,
       ];
   }
 }

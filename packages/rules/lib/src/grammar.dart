@@ -115,6 +115,31 @@ List<ColorId> nonAdjacentColors(ColorId color) {
   ];
 }
 
+/// Shortest step count between [a] and [b] along [colorRing], wrapping.
+int colorRingSteps(ColorId a, ColorId b) {
+  final ia = colorRing.indexOf(a);
+  final ib = colorRing.indexOf(b);
+  if (ia < 0 || ib < 0) return colorRing.length;
+  final count = colorRing.length;
+  final diff = (ia - ib).abs();
+  return math.min(diff, count - diff);
+}
+
+/// Ring neighbors sit one step away. Color-only decoys must step past them.
+const int minDecoyColorRingSteps = 2;
+
+/// Picks for a color-only decoy: at least [minDecoyColorRingSteps] on the ring
+/// and at least [minDecoyColorDistance] in RGB.
+List<ColorId> separatedDecoyColors(ColorId color) {
+  return [
+    for (final candidate in colorRing)
+      if (candidate != color &&
+          colorRingSteps(color, candidate) >= minDecoyColorRingSteps &&
+          colorDistance(color, candidate) >= minDecoyColorDistance)
+        candidate,
+  ];
+}
+
 /// Floor used by [distantColors], in Euclidean RGB distance (0 to about 441).
 ///
 /// Near pairs such as orange/amber sit under this. A round may use a nearer
@@ -138,12 +163,7 @@ double colorDistance(ColorId a, ColorId b) {
 /// Skips the color itself and both ring neighbors, and keeps only colors at
 /// least [minDecoyColorDistance] away. The neighbor pairs orange/amber,
 /// red/pink, and green/teal sit under that floor.
-List<ColorId> distantColors(ColorId color) {
-  return [
-    for (final candidate in nonAdjacentColors(color))
-      if (colorDistance(color, candidate) >= minDecoyColorDistance) candidate,
-  ];
-}
+List<ColorId> distantColors(ColorId color) => separatedDecoyColors(color);
 
 BodyId? parseBody(String raw) => _byName(BodyId.values, raw);
 

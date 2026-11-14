@@ -231,7 +231,7 @@ IconSnapshot? trySingleVisualDiff(
     case SingleVisualDiffKind.layer0Color:
       final current = baseline.layers[0].color;
       final options = _nonEmptyColors(layer0ColorOptions) ??
-          [for (final c in ColorId.values) if (c != current) c];
+          separatedDecoyColors(current);
       if (options.isEmpty) return null;
       final picked = options.elementAt(rng.nextInt(options.length));
       final next = baseline.copyLayer(0, (l) => l.copyWith(color: picked));
@@ -249,10 +249,7 @@ IconSnapshot? trySingleVisualDiff(
 
 IconSnapshot? _diffLayerColor(IconSnapshot baseline, int layer, math.Random rng) {
   final current = baseline.layers[layer].color;
-  final options = [
-    for (final c in ColorId.values)
-      if (c != current) c,
-  ];
+  final options = separatedDecoyColors(current);
   if (options.isEmpty) return null;
   final picked = options.elementAt(rng.nextInt(options.length));
   final next = baseline.copyLayer(layer, (l) => l.copyWith(color: picked));

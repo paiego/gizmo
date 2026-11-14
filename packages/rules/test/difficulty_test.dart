@@ -378,6 +378,65 @@ void main() {
     }
   });
 
+  test('color-only decoys stay separated on the ring and in RGB', () {
+  for (final similarity in [0.75, 1.0]) {
+      for (var seed = 0; seed < 24; seed++) {
+        final round = buildRound(
+          level: 19,
+          random: math.Random(seed),
+          decoySimilarity: similarity,
+        );
+        for (final decoy in decoyChoicesOf(round)) {
+          final kind = classifySingleVisualDiff(
+            round.baseline,
+            decoy.appearance,
+          );
+          if (kind == null) continue;
+          if (kind == SingleVisualDiffKind.layer0Color) {
+            final color = decoy.appearance.layers[0].color;
+            expect(separatedDecoyColors(round.original.color), contains(color));
+            expect(
+              colorDistance(round.original.color, color),
+              greaterThanOrEqualTo(minDecoyColorDistance),
+            );
+            expect(
+              colorRingSteps(round.original.color, color),
+              greaterThanOrEqualTo(minDecoyColorRingSteps),
+            );
+          }
+          if (kind == SingleVisualDiffKind.layer1Color) {
+            final layer = 1;
+            final base = round.baseline.layers[layer].color;
+            final color = decoy.appearance.layers[layer].color;
+            expect(separatedDecoyColors(base), contains(color));
+          }
+          if (kind == SingleVisualDiffKind.layer2Color) {
+            final layer = 2;
+            final base = round.baseline.layers[layer].color;
+            final color = decoy.appearance.layers[layer].color;
+            expect(separatedDecoyColors(base), contains(color));
+          }
+        }
+      }
+    }
+    for (final similarity in [0.0, 0.25, 0.5, 0.74]) {
+      final changes = decoyVariationCountForSimilarity(similarity);
+      if (changes != 1) continue;
+      for (var seed = 0; seed < 12; seed++) {
+        final round = buildRound(
+          level: 6,
+          random: math.Random(seed),
+          decoySimilarity: similarity,
+        );
+        for (final decoy in decoyAssembliesOf(round)) {
+          if (decoy.color == round.original.color) continue;
+          if (decoyFieldChanges(round.original, decoy) != 1) continue;
+          expect(separatedDecoyColors(round.original.color), contains(decoy.color));
+        }
+      }
+    }
+  });
+
   test('similarity 1.0 rotates single-diff kinds on snapshots', () {
     for (final level in [4, 6, 19]) {
       final decoyCount = choiceCountForLevel(level) - 1;
