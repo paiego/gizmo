@@ -218,6 +218,19 @@ List<ColorId>? _nonEmptyColors(Iterable<ColorId>? options) {
   return list.isEmpty ? null : list;
 }
 
+/// True when changing [layer]'s paint color would show on screen.
+///
+/// If a higher layer already uses the same [ColorId], recoloring [layer] stays
+/// hidden behind that ink — the decoy still looks like the same hue (levels
+/// 13–14 purple square / teal + purple diamond cases).
+bool colorDecoyLayerIsVisible(IconSnapshot baseline, int layer) {
+  final color = baseline.layers[layer].color;
+  for (var i = layer + 1; i < baseline.layers.length; i++) {
+    if (baseline.layers[i].color == color) return false;
+  }
+  return true;
+}
+
 /// Copies [baseline] and changes exactly one property for [kind].
 ///
 /// Returns null when no alternate value is available or delta would not be 1.
@@ -229,6 +242,7 @@ IconSnapshot? trySingleVisualDiff(
 }) {
   switch (kind) {
     case SingleVisualDiffKind.layer0Color:
+      if (!colorDecoyLayerIsVisible(baseline, 0)) return null;
       final current = baseline.layers[0].color;
       final options = _nonEmptyColors(layer0ColorOptions) ??
           separatedDecoyColors(current);
@@ -248,6 +262,7 @@ IconSnapshot? trySingleVisualDiff(
 }
 
 IconSnapshot? _diffLayerColor(IconSnapshot baseline, int layer, math.Random rng) {
+  if (!colorDecoyLayerIsVisible(baseline, layer)) return null;
   final current = baseline.layers[layer].color;
   final options = separatedDecoyColors(current);
   if (options.isEmpty) return null;
