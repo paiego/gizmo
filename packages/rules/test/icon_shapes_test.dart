@@ -2,6 +2,25 @@ import 'package:gizmo_rules/gizmo_rules.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('polygon kind decoys require a side-count gap of at least two', () {
+    expect(polygonKindDecoyAllowed(IconShapeKind.pentagon, IconShapeKind.square),
+        isFalse);
+    expect(polygonKindDecoyAllowed(IconShapeKind.pentagon, IconShapeKind.hexagon),
+        isFalse);
+    expect(polygonKindDecoyAllowed(IconShapeKind.pentagon, IconShapeKind.triangle),
+        isTrue);
+    expect(polygonKindDecoyAllowed(IconShapeKind.pentagon, IconShapeKind.heptagon),
+        isTrue);
+    expect(polygonKindDecoyAllowed(IconShapeKind.pentagon, IconShapeKind.circle),
+        isTrue);
+    expect(polygonKindDecoyAllowed(IconShapeKind.square, IconShapeKind.pentagon),
+        isFalse);
+    expect(polygonKindDecoyAllowed(IconShapeKind.square, IconShapeKind.hexagon),
+        isTrue);
+    expect(polygonKindDecoyAllowed(IconShapeKind.triangle, IconShapeKind.pentagon),
+        isTrue);
+  });
+
   test('inkRadius includes half the stroke width', () {
     const shape = IconShape(
       kind: IconShapeKind.circle,

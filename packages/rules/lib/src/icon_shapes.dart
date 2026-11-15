@@ -50,6 +50,22 @@ const Map<IconShapeKind, int> polygonSides = {
   IconShapeKind.decagon: 10,
 };
 
+/// Minimum side-count gap for a shape-only decoy when the baseline layer is a
+/// regular polygon (e.g. pentagon may not decoy to square or hexagon).
+const int minPolygonDecoySideGap = 2;
+
+/// True when [kind] is a regular polygon listed in [polygonSides].
+bool isRegularPolygonKind(IconShapeKind kind) =>
+    polygonSides.containsKey(kind);
+
+/// Whether [to] is allowed as a shape-kind-only decoy for regular polygon [from].
+bool polygonKindDecoyAllowed(IconShapeKind from, IconShapeKind to) {
+  if (!isRegularPolygonKind(from)) return true;
+  final fromSides = polygonSides[from]!;
+  final toSides = isRegularPolygonKind(to) ? polygonSides[to]! : 0;
+  return (toSides - fromSides).abs() >= minPolygonDecoySideGap;
+}
+
 enum IconPaint { fill, stroke }
 
 /// One centered shape in an icon.
@@ -282,6 +298,7 @@ IconSnapshot? _diffLayerKind(IconSnapshot baseline, int layer, math.Random rng) 
   ];
   options.shuffle(rng);
   for (final picked in options) {
+    if (!polygonKindDecoyAllowed(current.kind, picked)) continue;
     var shape = current.copyWith(kind: picked, points: 0);
     if (picked == IconShapeKind.circle) {
       if (current.rotation != 0.0) continue;

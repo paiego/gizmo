@@ -498,6 +498,32 @@ void main() {
     }
   });
 
+  test('polygon shape decoys widen side count at similarity 1.0', () {
+    for (var seed = 0; seed < 48; seed++) {
+      final round = buildRound(
+        level: 19,
+        random: math.Random(seed),
+        decoySimilarity: 1,
+      );
+      for (final decoy in decoyChoicesOf(round)) {
+        final kind = decoy.singleDiffKind;
+        if (kind != SingleVisualDiffKind.layer1Kind &&
+            kind != SingleVisualDiffKind.layer2Kind) {
+          continue;
+        }
+        final layer = kind == SingleVisualDiffKind.layer1Kind ? 1 : 2;
+        final from = round.baseline.layers[layer].kind;
+        final to = decoy.appearance.layers[layer].kind;
+        if (!isRegularPolygonKind(from)) continue;
+        expect(
+          polygonKindDecoyAllowed(from, to),
+          isTrue,
+          reason: 'seed $seed $from -> $to',
+        );
+      }
+    }
+  });
+
   test('similarity 1.0 rotates single-diff kinds on snapshots', () {
     for (final level in [4, 6, 19]) {
       final decoyCount = choiceCountForLevel(level) - 1;
