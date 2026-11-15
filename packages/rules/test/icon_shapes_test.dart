@@ -13,8 +13,10 @@ void main() {
         isTrue);
     expect(polygonKindDecoyAllowed(IconShapeKind.pentagon, IconShapeKind.circle),
         isTrue);
-    expect(polygonKindDecoyAllowed(IconShapeKind.square, IconShapeKind.hexagon),
+    expect(polygonKindDecoyAllowed(IconShapeKind.square, IconShapeKind.pentagon),
         isFalse);
+    expect(polygonKindDecoyAllowed(IconShapeKind.square, IconShapeKind.hexagon),
+        isTrue);
     expect(polygonKindDecoyAllowed(IconShapeKind.triangle, IconShapeKind.pentagon),
         isTrue);
   });
