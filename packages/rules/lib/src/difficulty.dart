@@ -262,6 +262,38 @@ BuiltRound buildRound({
   bool levelBasedProximity = false,
 }) {
   final rng = random ?? Random();
+  const maxAttempts = 24;
+  for (var attempt = 0; attempt < maxAttempts; attempt++) {
+  try {
+    return _buildRoundOnce(
+      level: level,
+      rng: rng,
+      decoySimilarity: decoySimilarity,
+      decoySimilarityMax: decoySimilarityMax,
+      decoySimilarityRampSlope: decoySimilarityRampSlope,
+      levelBasedProximity: levelBasedProximity,
+    );
+  } on StateError catch (error) {
+    if (attempt == maxAttempts - 1) rethrow;
+    final message = error.toString();
+    if (!message.contains('snapshot decoy') &&
+        !message.contains('Decoy appearance') &&
+        !message.contains('Repeated decoy appearance')) {
+      rethrow;
+    }
+  }
+  }
+  throw StateError('Could not build a round for level $level.');
+}
+
+BuiltRound _buildRoundOnce({
+  required int level,
+  required Random rng,
+  required double decoySimilarity,
+  required double decoySimilarityMax,
+  required double decoySimilarityRampSlope,
+  required bool levelBasedProximity,
+}) {
   final original = _randomOriginal(rng);
   final effectiveSimilarity = activeDecoySimilarityForLevel(
     level: level,
@@ -349,39 +381,43 @@ List<RoundChoice> _buildSnapshotDecoys({
   final usedKinds = <SingleVisualDiffKind>{};
   for (var slot = 0; slot < count; slot++) {
     final preferred = kinds[slot % kinds.length];
-    final tryKinds = [
-      preferred,
+    final tryKinds = <SingleVisualDiffKind>[
+      if (!usedKinds.contains(preferred)) preferred,
       for (final kind in kinds)
         if (kind != preferred && !usedKinds.contains(kind)) kind,
       for (final kind in kinds)
-        if (kind != preferred && usedKinds.contains(kind)) kind,
+        if (usedKinds.contains(kind)) kind,
     ];
     RoundChoice? choice;
-    for (final kind in tryKinds) {
-      for (var attempt = 0; attempt < 32; attempt++) {
-        final next = trySingleVisualDiff(
-          baseline,
-          kind,
-          rng,
-          layer0ColorOptions: kind == SingleVisualDiffKind.layer0Color
-              ? layer0Colors
-              : null,
-        );
-        if (next == null || !used.add(next)) continue;
-        final applied = classifySingleVisualDiff(baseline, next);
-        if (applied == null) continue;
-        final assembly = applied == SingleVisualDiffKind.layer0Color
-            ? original.copyWith(color: next.layers[0].color)
-            : original;
-        usedKinds.add(applied);
-        choice = RoundChoice(
-          assembly: assembly,
-          appearance: next,
-          singleDiffKind: applied,
-        );
-        break;
+    final attemptsPerKind = 96;
+    final maxAttempts = attemptsPerKind * tryKinds.length;
+    for (var attempt = 0; attempt < maxAttempts && choice == null; attempt++) {
+      final kind = tryKinds[
+          attempt < tryKinds.length ? attempt : rng.nextInt(tryKinds.length)];
+      final next = trySingleVisualDiff(
+        baseline,
+        kind,
+        rng,
+        layer0ColorOptions: kind == SingleVisualDiffKind.layer0Color
+            ? layer0Colors
+            : null,
+      );
+      if (next == null) continue;
+      if (!used.add(next)) continue;
+      final applied = classifySingleVisualDiff(baseline, next);
+      if (applied == null) {
+        used.remove(next);
+        continue;
       }
-      if (choice != null) break;
+      final assembly = applied == SingleVisualDiffKind.layer0Color
+          ? original.copyWith(color: next.layers[0].color)
+          : original;
+      usedKinds.add(applied);
+      choice = RoundChoice(
+        assembly: assembly,
+        appearance: next,
+        singleDiffKind: applied,
+      );
     }
     if (choice == null) {
       throw StateError(

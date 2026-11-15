@@ -68,7 +68,8 @@ void main() {
 
   test('purple color decoys skip same-hue neighbors', () {
     final options = separatedDecoyColors(ColorId.purple);
-    expect(options, [ColorId.orange, ColorId.amber, ColorId.green]);
+    expect(options, [ColorId.orange, ColorId.amber]);
+    expect(options, isNot(contains(ColorId.green)));
     expect(options, isNot(contains(ColorId.pink)));
     expect(options, isNot(contains(ColorId.blue)));
     expect(options, isNot(contains(ColorId.teal)));
@@ -78,6 +79,50 @@ void main() {
         colorDistance(ColorId.purple, other),
         greaterThanOrEqualTo(minDecoyColorDistance),
       );
+    }
+  });
+
+  test('teal color decoys skew warm for readable contrast', () {
+    final options = separatedDecoyColors(ColorId.teal);
+    expect(options, [ColorId.red, ColorId.orange]);
+    expect(options, isNot(contains(ColorId.pink)));
+    expect(options, isNot(contains(ColorId.blue)));
+    for (final other in options) {
+      expect(colorRingSteps(ColorId.teal, other), greaterThanOrEqualTo(3));
+      expect(
+        colorDistance(ColorId.teal, other),
+        greaterThanOrEqualTo(minDecoyColorDistance),
+      );
+    }
+  });
+
+  test('color decoys avoid occluded layers at similarity 1', () {
+    for (final level in [13, 14]) {
+      for (var seed = 0; seed < 48; seed++) {
+        final round = buildRound(
+          level: level,
+          random: math.Random(seed),
+          decoySimilarity: 1,
+        );
+        for (final decoy in decoyChoicesOf(round)) {
+          final kind = decoy.singleDiffKind;
+          if (kind != SingleVisualDiffKind.layer0Color &&
+              kind != SingleVisualDiffKind.layer1Color &&
+              kind != SingleVisualDiffKind.layer2Color) {
+            continue;
+          }
+          final layer = kind == SingleVisualDiffKind.layer0Color
+              ? 0
+              : kind == SingleVisualDiffKind.layer1Color
+                  ? 1
+                  : 2;
+          expect(
+            colorDecoyLayerIsVisible(round.baseline, layer),
+            isTrue,
+            reason: 'seed $seed level $level kind $kind',
+          );
+        }
+      }
     }
   });
 
@@ -475,7 +520,8 @@ void main() {
         }
         expect(kinds.length, greaterThan(1));
         if (decoyCount >= 7) {
-          expect(kinds.length, greaterThanOrEqualTo(4));
+          // Color kinds may be skipped when a foreground layer shares the hue.
+          expect(kinds.length, greaterThanOrEqualTo(3));
         }
       }
     }

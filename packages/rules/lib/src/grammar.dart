@@ -131,23 +131,46 @@ int colorRingSteps(ColorId a, ColorId b) {
 /// on small inner layers.
 const int minDecoyColorRingSteps = 3;
 
+bool _isCoolHue(ColorId color) =>
+    color == ColorId.teal ||
+    color == ColorId.blue ||
+    color == ColorId.purple ||
+    color == ColorId.pink;
+
+bool _isWarmHue(ColorId color) =>
+    color == ColorId.red ||
+    color == ColorId.orange ||
+    color == ColorId.amber;
+
 /// Picks for a color-only decoy: at least [minDecoyColorRingSteps] on the ring
 /// and at least [minDecoyColorDistance] in painted RGB ([colorValue]).
+///
+/// High-chroma cool bases skew toward warm opposites so purple/teal read as a
+/// hue change, not a violet or cyan tint shift.
 List<ColorId> separatedDecoyColors(ColorId color) {
-  return [
+  final base = [
     for (final candidate in colorRing)
       if (candidate != color &&
           colorRingSteps(color, candidate) >= minDecoyColorRingSteps &&
           colorDistance(color, candidate) >= minDecoyColorDistance)
         candidate,
   ];
+  if (_isCoolHue(color)) {
+    final warm = base.where(_isWarmHue).toList();
+    if (warm.length >= 2) return warm;
+  }
+  if (_isWarmHue(color)) {
+    final cool = base.where(_isCoolHue).toList();
+    if (cool.length >= 2) return cool;
+  }
+  return base;
 }
 
 /// Floor used by [distantColors], in Euclidean RGB distance (0 to about 441).
 ///
 /// Near pairs such as purple/pink (~105 RGB at two ring steps) sit under this.
 /// A round may use a nearer color; this floor only marks the far set.
-const double minDecoyColorDistance = 140;
+const double minDecoyColorDistance = 155;
 
 /// Opaque ARGB painted for [color] (same slots as [warmPalette]).
 int paintedColorArgb(ColorId color) => colorValue[color]!;
