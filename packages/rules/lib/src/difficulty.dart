@@ -278,7 +278,8 @@ BuiltRound buildRound({
     final message = error.toString();
     if (!message.contains('snapshot decoy') &&
         !message.contains('Decoy appearance') &&
-        !message.contains('Repeated decoy appearance')) {
+        !message.contains('Repeated decoy appearance') &&
+        !message.contains('separated polygon colors')) {
       rethrow;
     }
   }
