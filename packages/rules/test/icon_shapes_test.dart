@@ -34,6 +34,38 @@ void main() {
     expect(inkRadius(shape), closeTo(22, 1e-9));
   });
 
+  test('every catalog icon satisfies the polygon layer color gap', () {
+    for (final assembly in legalAssemblies()) {
+      final snapshot = materializeIcon(assembly);
+      expect(
+        iconSnapshotPolygonColorGapSatisfied(snapshot),
+        isTrue,
+        reason: assembly.toString(),
+      );
+    }
+  });
+
+  test('three polygon layers use the three-layer ring floor', () {
+    expect(minIconPolygonThreeLayerRingSteps, 2);
+    expect(
+      iconPolygonColorsSeparatedForLayerCount(
+        ColorId.red,
+        ColorId.green,
+        3,
+      ),
+      isTrue,
+    );
+    expect(iconPolygonColorsSeparated(ColorId.red, ColorId.green), isTrue);
+    expect(
+      iconPolygonColorsSeparatedForLayerCount(
+        ColorId.red,
+        ColorId.orange,
+        3,
+      ),
+      isFalse,
+    );
+  });
+
   test('assembly ink radii differ across the catalog', () {
     var minInk = double.infinity;
     var maxInk = 0.0;

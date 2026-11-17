@@ -181,13 +181,125 @@ const List<SingleVisualDiffKind> singleVisualDiffKinds = [
   SingleVisualDiffKind.layer2Kind,
 ];
 
+/// Colors of regular-polygon layers on [snapshot], excluding [layer] when set.
+int _polygonLayerCount(IconSnapshot snapshot) {
+  var count = 0;
+  for (final shape in snapshot.layers) {
+    if (isRegularPolygonKind(shape.kind)) count += 1;
+  }
+  return count;
+}
+
+List<ColorId> polygonLayerPeerColors(IconSnapshot snapshot, int layer) {
+  final peers = <ColorId>[];
+  for (var i = 0; i < snapshot.layers.length; i++) {
+    if (i == layer) continue;
+    final shape = snapshot.layers[i];
+    if (isRegularPolygonKind(shape.kind)) peers.add(shape.color);
+  }
+  return peers;
+}
+
+/// True when every pair of polygon layers on [snapshot] meets the icon color gap.
+bool iconSnapshotPolygonColorGapSatisfied(IconSnapshot snapshot) {
+  final polygonColors = <ColorId>[];
+  for (final shape in snapshot.layers) {
+    if (!isRegularPolygonKind(shape.kind)) continue;
+    polygonColors.add(shape.color);
+  }
+  if (polygonColors.length < 2) return true;
+  final count = polygonColors.length;
+  for (var i = 0; i < polygonColors.length; i++) {
+    for (var j = i + 1; j < polygonColors.length; j++) {
+      if (!iconPolygonColorsSeparatedForLayerCount(
+        polygonColors[i],
+        polygonColors[j],
+        count,
+      )) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 /// Materializes three layers from [assembly]. Seed runs only here.
 IconSnapshot materializeIcon(Assembly assembly) {
-  return IconSnapshot([
-    _shape(assembly, 0, 20, 27, 3.5, 6.5),
-    _shape(assembly, 1, 10, 16, 2.0, 4.0),
-    _shape(assembly, 2, 9.93, 9.97, 1.2, 2.4),
-  ]);
+  final geometry = [
+    _shapeGeometry(assembly, 0, 20, 27, 3.5, 6.5),
+    _shapeGeometry(assembly, 1, 10, 16, 2.0, 4.0),
+    _shapeGeometry(assembly, 2, 9.93, 9.97, 1.2, 2.4),
+  ];
+  const maxAttempts = 48;
+  for (var attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      final layers = _materializeLayerColors(assembly, geometry, attempt);
+      final snapshot = IconSnapshot(layers);
+      if (iconSnapshotPolygonColorGapSatisfied(snapshot)) return snapshot;
+    } on StateError {
+      continue;
+    }
+  }
+  throw StateError(
+    'Could not assign separated polygon colors for $assembly.',
+  );
+}
+
+List<IconShape> _materializeLayerColors(
+  Assembly assembly,
+  List<IconShape> geometry,
+  int attempt,
+) {
+  final polygonColors = <ColorId>[];
+  final polygonLayerIndices = _polygonLayerIndices(geometry);
+  final polygonLayerCount = polygonLayerIndices.length;
+  final layers = <IconShape>[];
+  for (var layer = 0; layer < 3; layer++) {
+    final base = geometry[layer];
+    final colorRandom = math.Random(_seed(assembly, layer) + 9001 + attempt * 37);
+    final color = _assignLayerPaintColor(
+      assembly,
+      layer,
+      base.kind,
+      polygonColors,
+      colorRandom,
+      geometry,
+      polygonLayerIndices,
+      polygonLayerCount,
+    );
+    if (isRegularPolygonKind(base.kind)) polygonColors.add(color);
+    layers.add(base.copyWith(color: color));
+  }
+  return layers;
+}
+
+List<int> _polygonLayerIndices(List<IconShape> geometry) {
+  return [
+    for (var i = 0; i < geometry.length; i++)
+      if (isRegularPolygonKind(geometry[i].kind)) i,
+  ];
+}
+
+bool _polygonColorAssignmentCompletable(
+  List<int> remainingPolygonLayers,
+  List<ColorId> polygonColorsSoFar,
+  int polygonLayerCount,
+) {
+  if (remainingPolygonLayers.isEmpty) return true;
+  final options = iconPolygonColorOptions(
+    polygonColorsSoFar,
+    polygonLayerCount: polygonLayerCount,
+  );
+  for (final pick in options) {
+    if (_polygonColorAssignmentCompletable(
+      remainingPolygonLayers.sublist(1),
+      [...polygonColorsSoFar, pick],
+      polygonLayerCount,
+    )) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /// The three shapes that paint [assembly], larger one first.
@@ -260,8 +372,21 @@ IconSnapshot? trySingleVisualDiff(
     case SingleVisualDiffKind.layer0Color:
       if (!colorDecoyLayerIsVisible(baseline, 0)) return null;
       final current = baseline.layers[0].color;
-      final options = _nonEmptyColors(layer0ColorOptions) ??
+      var options = _nonEmptyColors(layer0ColorOptions) ??
           separatedDecoyColors(current);
+      if (isRegularPolygonKind(baseline.layers[0].kind)) {
+        final peers = polygonLayerPeerColors(baseline, 0);
+        final polygonCount = _polygonLayerCount(baseline);
+        options = [
+          for (final value in options)
+            if (iconPolygonColorCompatible(
+              value,
+              peers,
+              polygonLayerCount: polygonCount,
+            ))
+              value,
+        ];
+      }
       if (options.isEmpty) return null;
       final picked = options.elementAt(rng.nextInt(options.length));
       final next = baseline.copyLayer(0, (l) => l.copyWith(color: picked));
@@ -280,7 +405,20 @@ IconSnapshot? trySingleVisualDiff(
 IconSnapshot? _diffLayerColor(IconSnapshot baseline, int layer, math.Random rng) {
   if (!colorDecoyLayerIsVisible(baseline, layer)) return null;
   final current = baseline.layers[layer].color;
-  final options = separatedDecoyColors(current);
+  var options = separatedDecoyColors(current);
+  if (isRegularPolygonKind(baseline.layers[layer].kind)) {
+    final peers = polygonLayerPeerColors(baseline, layer);
+    final polygonCount = _polygonLayerCount(baseline);
+    options = [
+      for (final value in options)
+        if (iconPolygonColorCompatible(
+          value,
+          peers,
+          polygonLayerCount: polygonCount,
+        ))
+          value,
+    ];
+  }
   if (options.isEmpty) return null;
   final picked = options.elementAt(rng.nextInt(options.length));
   final next = baseline.copyLayer(layer, (l) => l.copyWith(color: picked));
@@ -299,6 +437,18 @@ IconSnapshot? _diffLayerKind(IconSnapshot baseline, int layer, math.Random rng) 
   options.shuffle(rng);
   for (final picked in options) {
     if (!polygonKindDecoyAllowed(current.kind, picked)) continue;
+    if (isRegularPolygonKind(picked)) {
+      final peers = polygonLayerPeerColors(baseline, layer);
+      final nextCount = _polygonLayerCount(baseline) +
+          (isRegularPolygonKind(baseline.layers[layer].kind) ? 0 : 1);
+      if (!iconPolygonColorCompatible(
+        current.color,
+        peers,
+        polygonLayerCount: nextCount,
+      )) {
+        continue;
+      }
+    }
     var shape = current.copyWith(kind: picked, points: 0);
     if (picked == IconShapeKind.circle) {
       if (current.rotation != 0.0) continue;
@@ -412,7 +562,7 @@ int _seed(Assembly assembly, int layer) {
       2048 * assembly.pulse.index;
 }
 
-IconShape _shape(
+IconShape _shapeGeometry(
   Assembly assembly,
   int layer,
   double radiusLo,
@@ -435,11 +585,70 @@ IconShape _shape(
     kind: kind,
     radius: _radius(random, iconRadius - outset, radiusLo, radiusHi),
     rotation: rotation,
-    color: _layerColorAtMaterialize(assembly, layer, random),
+    color: ColorId.red,
     paint: paint,
     thickness: thickness,
     points: points,
   );
+}
+
+ColorId _assignLayerPaintColor(
+  Assembly assembly,
+  int layer,
+  IconShapeKind kind,
+  List<ColorId> polygonPeers,
+  math.Random random,
+  List<IconShape> geometry,
+  List<int> polygonLayerIndices,
+  int polygonLayerCount,
+) {
+  if (!isRegularPolygonKind(kind)) {
+    return _layerColorAtMaterialize(assembly, layer, random);
+  }
+  if (layer == 0) {
+    final later = polygonLayerIndices.where((i) => i > 0).toList();
+    if (later.isNotEmpty &&
+        !_polygonColorAssignmentCompletable(
+          later,
+          [assembly.color],
+          polygonLayerCount,
+        )) {
+      throw StateError(
+        'Assembly color ${assembly.color} cannot complete polygon layers on '
+        '$assembly.',
+      );
+    }
+    return assembly.color;
+  }
+  if (polygonPeers.isEmpty) {
+    final anchor = ColorId.values[
+        (_structureColorBase(assembly) + layer) % ColorId.values.length];
+    return _otherColor(anchor, random);
+  }
+  final layerIndex = polygonLayerIndices.indexOf(layer);
+  final remaining =
+      layerIndex >= 0 ? polygonLayerIndices.sublist(layerIndex + 1) : <int>[];
+  var candidates = iconPolygonColorOptions(
+    polygonPeers,
+    polygonLayerCount: polygonLayerCount,
+  );
+  if (remaining.isNotEmpty) {
+    candidates = [
+      for (final value in candidates)
+        if (_polygonColorAssignmentCompletable(
+          remaining,
+          [...polygonPeers, value],
+          polygonLayerCount,
+        ))
+          value,
+    ];
+  }
+  if (candidates.isEmpty) {
+    throw StateError(
+      'No separated polygon paint color for layer $layer of $assembly.',
+    );
+  }
+  return candidates[random.nextInt(candidates.length)];
 }
 
 /// Used only while materializing from [Assembly]. Colors live on [IconSnapshot]

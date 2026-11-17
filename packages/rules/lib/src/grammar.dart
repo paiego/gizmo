@@ -172,6 +172,75 @@ List<ColorId> separatedDecoyColors(ColorId color) {
 /// A round may use a nearer color; this floor only marks the far set.
 const double minDecoyColorDistance = 155;
 
+/// Minimum ring steps between polygon layer colors on one icon (same floor as
+/// color-only decoys).
+const int minIconPolygonColorRingSteps = minDecoyColorRingSteps;
+
+/// Minimum painted RGB distance between polygon layer colors on one icon.
+const double minIconPolygonColorDistance = minDecoyColorDistance;
+
+/// On the eight-color ring, at most two polygons can all be at ring step ≥3
+/// apart. When an icon paints three polygon layers, pairs use this ring floor
+/// and keep [minIconPolygonColorDistance].
+const int minIconPolygonThreeLayerRingSteps = 2;
+
+/// Ring floor for [polygonLayerCount] regular-polygon layers on one icon.
+int minIconPolygonRingStepsForLayerCount(int polygonLayerCount) =>
+    polygonLayerCount >= 3
+        ? minIconPolygonThreeLayerRingSteps
+        : minIconPolygonColorRingSteps;
+
+/// True when [a] and [b] are distinct and satisfy the ring and RGB floors for
+/// [polygonLayerCount] polygon layers on one icon.
+bool iconPolygonColorsSeparatedForLayerCount(
+  ColorId a,
+  ColorId b,
+  int polygonLayerCount,
+) {
+  if (a == b) return false;
+  final ringFloor = minIconPolygonRingStepsForLayerCount(polygonLayerCount);
+  return colorRingSteps(a, b) >= ringFloor &&
+      colorDistance(a, b) >= minIconPolygonColorDistance;
+}
+
+/// True when [a] and [b] meet the two-polygon icon floors (ring ≥3, RGB ≥155).
+bool iconPolygonColorsSeparated(ColorId a, ColorId b) =>
+    iconPolygonColorsSeparatedForLayerCount(a, b, 2);
+
+/// True when [candidate] is separated from every color in [polygonPeerColors].
+bool iconPolygonColorCompatible(
+  ColorId candidate,
+  Iterable<ColorId> polygonPeerColors, {
+  required int polygonLayerCount,
+}) {
+  for (final peer in polygonPeerColors) {
+    if (!iconPolygonColorsSeparatedForLayerCount(
+      candidate,
+      peer,
+      polygonLayerCount,
+    )) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Catalog colors that satisfy [iconPolygonColorCompatible] with [polygonPeerColors].
+List<ColorId> iconPolygonColorOptions(
+  Iterable<ColorId> polygonPeerColors, {
+  required int polygonLayerCount,
+}) {
+  return [
+    for (final candidate in ColorId.values)
+      if (iconPolygonColorCompatible(
+        candidate,
+        polygonPeerColors,
+        polygonLayerCount: polygonLayerCount,
+      ))
+        candidate,
+  ];
+}
+
 /// Opaque ARGB painted for [color] (same slots as [warmPalette]).
 int paintedColorArgb(ColorId color) => colorValue[color]!;
 

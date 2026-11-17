@@ -180,6 +180,30 @@ void main() {
     expect(pulses, PulseId.values.toSet());
   });
 
+  test('round appearances satisfy the polygon layer color gap', () {
+    for (final level in [1, 7, 13, 14]) {
+      for (var seed = 0; seed < 64; seed++) {
+        final round = buildRound(
+          level: level,
+          random: math.Random(seed),
+          decoySimilarity: level >= 13 ? 1 : 0,
+        );
+        expect(
+          iconSnapshotPolygonColorGapSatisfied(round.baseline),
+          isTrue,
+          reason: 'baseline seed $seed level $level',
+        );
+        for (final choice in round.choices) {
+          expect(
+            iconSnapshotPolygonColorGapSatisfied(choice.appearance),
+            isTrue,
+            reason: 'choice seed $seed level $level',
+          );
+        }
+      }
+    }
+  });
+
   test('a decoy is never equal to the original', () {
     for (final level in [1, 3, 4, 6, 7, 10, 11, 41]) {
       for (var seed = 0; seed < 80; seed++) {
@@ -547,7 +571,9 @@ void main() {
         expect(kinds.length, greaterThan(1));
         if (decoyCount >= 7) {
           // Color kinds may be skipped when a foreground layer shares the hue.
-          expect(kinds.length, greaterThanOrEqualTo(3));
+          // Kind kinds may be skipped when a new polygon would break the icon
+          // polygon color gap.
+          expect(kinds.length, greaterThanOrEqualTo(2));
         }
       }
     }
