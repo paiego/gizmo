@@ -6,8 +6,8 @@ import 'package:gizmo_rules/gizmo_rules.dart' hide iconCenter;
 import '../palette_scope.dart';
 import 'icon_shapes.dart';
 
-/// Painted ink uses this fraction of the cell reach (75% of the prior fill).
-const double iconPaintScale = 0.75;
+/// Layout cell size as a fraction of roomy/packed estimate (7.5% above prior 0.75).
+const double iconPaintScale = 0.80625;
 
 /// Paints one assembly as three shapes, one pixel inside the cell.
 ///
