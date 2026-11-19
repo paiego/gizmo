@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:gizmo_rules/gizmo_rules.dart';
 
 import '../account/local_score.dart';
+import '../debug/icon_log_store.dart';
 import '../game/session.dart';
 import '../theme.dart';
 import '../widgets/chance_marks.dart';
@@ -63,6 +64,7 @@ class PlayScreen extends StatefulWidget {
     required this.playerName,
     this.session,
     this.adminMode = false,
+    this.iconDebugLog = false,
     this.userId,
     this.localOnly = false,
     this.scores = const LocalScoreStore(),
@@ -75,6 +77,7 @@ class PlayScreen extends StatefulWidget {
   final String playerName;
   final GameSession? session;
   final bool adminMode;
+  final bool iconDebugLog;
   final double decoySimilarity;
   final double decoySimilarityMax;
   final double decoySimilarityRampSlope;
@@ -147,6 +150,12 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
   void _startRound({bool notify = true}) {
     _timer?.cancel();
     _round = _session.deal();
+    if (widget.iconDebugLog) {
+      IconLogStore.instance.logDealtRound(
+        level: _session.level,
+        round: _round!,
+      );
+    }
     _tapped = null;
     _phase = _Phase.look;
     _enterEdge = _pickEdge();
@@ -187,6 +196,9 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
     });
     _timer?.cancel();
     if (!correct) {
+      if (widget.iconDebugLog) {
+        IconLogStore.instance.markLastIncorrectTap(index);
+      }
       if (_animate) {
         _exit.forward(from: 0);
       } else {

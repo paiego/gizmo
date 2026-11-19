@@ -8,6 +8,7 @@ import '../account/profile_pictures.dart';
 import '../theme.dart';
 import '../widgets/gizmo_button.dart';
 import 'icon_gallery_screen.dart';
+import 'icon_log_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -262,6 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _account.copyWith(
                     admin: value,
                     adminMode: value && _account.adminMode,
+                    iconDebugLog: value && _account.iconDebugLog,
                   ),
                 );
               },
@@ -279,6 +281,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? (value) => _apply(_account.copyWith(adminMode: value))
                   : null,
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Icon debug log'),
+              subtitle: Text(
+                'In-memory numeric log of each round’s icons and decoys.',
+                style: TextStyle(color: look.muted),
+              ),
+              value: _account.admin && _account.iconDebugLog,
+              activeThumbColor: look.ink,
+              onChanged: _account.admin
+                  ? (value) => _apply(_account.copyWith(iconDebugLog: value))
+                  : null,
+            ),
+            if (_account.admin && _account.iconDebugLog) ...[
+              const SizedBox(height: 8),
+              GizmoButton(
+                key: const ValueKey('open-icon-log'),
+                label: 'Icon log',
+                filled: false,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (context) => const IconLogScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
             const SizedBox(height: 12),
             Text('Theme', style: TextStyle(fontSize: 16, color: look.muted)),
             const SizedBox(height: 8),
