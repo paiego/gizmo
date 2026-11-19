@@ -8,6 +8,7 @@ class GizmoAccount {
     this.username,
     this.admin = false,
     this.adminMode = false,
+    this.iconDebugLog = false,
     this.pictureId = defaultPictureId,
     this.themeId = 'warm',
     this.decoySimilarity = 0,
@@ -25,6 +26,10 @@ class GizmoAccount {
   /// Play continues after misses so high rounds can be inspected.
   /// Only meaningful while [admin] is on.
   final bool adminMode;
+
+  /// Records icon numeric vectors in memory for the hidden log screen.
+  /// Only meaningful while [admin] is on.
+  final bool iconDebugLog;
   final String pictureId;
   final String themeId;
 
@@ -52,6 +57,7 @@ class GizmoAccount {
     bool clearUsername = false,
     bool? admin,
     bool? adminMode,
+    bool? iconDebugLog,
     String? pictureId,
     String? themeId,
     double? decoySimilarity,
@@ -64,6 +70,7 @@ class GizmoAccount {
       username: clearUsername ? null : (username ?? this.username),
       admin: admin ?? this.admin,
       adminMode: adminMode ?? this.adminMode,
+      iconDebugLog: iconDebugLog ?? this.iconDebugLog,
       pictureId: pictureId ?? this.pictureId,
       themeId: themeId ?? this.themeId,
       decoySimilarity: decoySimilarity ?? this.decoySimilarity,

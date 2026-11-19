@@ -31,6 +31,7 @@ class AccountRepository {
   static const firebaseIdKey = 'account_firebase_id';
   static const adminKey = 'account_admin';
   static const adminModeKey = 'account_admin_mode';
+  static const iconDebugLogKey = 'account_icon_debug_log';
   static const pictureKey = 'account_picture';
   static const decoySimilarityKey = 'decoy_similarity';
   static const decoySimilarityMaxKey = 'decoy_similarity_max';
@@ -47,6 +48,7 @@ class AccountRepository {
       username: username,
       admin: prefs.getBool(adminKey) ?? false,
       adminMode: prefs.getBool(adminModeKey) ?? false,
+      iconDebugLog: prefs.getBool(iconDebugLogKey) ?? false,
       pictureId: prefs.getString(pictureKey) ?? GizmoAccount.defaultPictureId,
       themeId: themeId ?? 'warm',
       decoySimilarity: _similarity(prefs.getDouble(decoySimilarityKey)),
@@ -72,6 +74,7 @@ class AccountRepository {
     }
     await prefs.setBool(adminKey, account.admin);
     await prefs.setBool(adminModeKey, account.admin && account.adminMode);
+    await prefs.setBool(iconDebugLogKey, account.admin && account.iconDebugLog);
     await prefs.setString(pictureKey, account.pictureId);
     await prefs.setDouble(
       decoySimilarityKey,
